@@ -30,20 +30,44 @@
                     Close Window
                     <span class="shortcut">&#8984;W</span>
                 </div>
+                <div class="menu-dropdown-item" data-action="quit">
+                    Quit Radio Garden
+                    <span class="shortcut">&#8984;Q</span>
+                </div>
             </div>
         </div>
         <div class="menu-item" data-menu="stations">
             Stations
-            <div class="menu-dropdown" id="dropdown-stations">
-                <!-- Populated by JS -->
-            </div>
+            <div class="menu-dropdown" id="dropdown-stations"></div>
         </div>
         <div class="menu-item" data-menu="view">
             View
             <div class="menu-dropdown" id="dropdown-view">
-                <div class="menu-dropdown-item" data-action="toggle-visualizer-style">
-                    Visualizer: Bars
-                    <span class="shortcut">&#8984;V</span>
+                <div class="menu-dropdown-item" data-action="viz-rainbow">
+                    <span class="menu-check" id="check-rainbow">&#10003;</span>
+                    Rainbow Spectrum
+                </div>
+                <div class="menu-dropdown-item" data-action="viz-vu">
+                    <span class="menu-check" id="check-vu"></span>
+                    VU Meter
+                </div>
+                <div class="menu-dropdown-item" data-action="viz-crt">
+                    <span class="menu-check" id="check-crt"></span>
+                    CRT Phosphor
+                </div>
+                <div class="menu-dropdown-item" data-action="viz-scope">
+                    <span class="menu-check" id="check-scope"></span>
+                    Oscilloscope
+                </div>
+            </div>
+        </div>
+        <div class="menu-item" data-menu="window">
+            Window
+            <div class="menu-dropdown" id="dropdown-window">
+                <div class="menu-dropdown-item" data-action="show-window">
+                    <span class="menu-check" id="check-window">&#10003;</span>
+                    Radio Garden
+                    <span class="shortcut">&#8984;1</span>
                 </div>
             </div>
         </div>
@@ -51,6 +75,10 @@
             Help
             <div class="menu-dropdown" id="dropdown-help">
                 <div class="menu-dropdown-item" data-action="help">Radio Garden Help</div>
+                <div class="menu-separator"></div>
+                <div class="menu-dropdown-item" data-action="toggle-balloons" id="balloon-toggle">
+                    Show Balloon Help
+                </div>
             </div>
         </div>
         <div class="menu-clock" id="menu-clock"></div>
@@ -59,14 +87,23 @@
     <!-- Desktop -->
     <div class="desktop" id="desktop">
 
+        <!-- Desktop Icon (shown when window is closed) -->
+        <div class="desktop-icon" id="desktop-icon" style="display:none">
+            <div class="desktop-icon-img">&#128251;</div>
+            <div class="desktop-icon-label">Radio Garden</div>
+        </div>
+
         <!-- Main Window -->
         <div class="window" id="main-window">
             <div class="window-titlebar" id="main-titlebar">
-                <div class="titlebar-btn close-btn" id="close-btn" title="Close"></div>
+                <div class="titlebar-btn close-btn" id="close-btn" title="Close"
+                     data-balloon="Closes this window. Your music will keep playing."></div>
                 <div class="window-title">Radio Garden</div>
                 <div class="titlebar-controls-right">
-                    <div class="titlebar-btn shade-btn" id="shade-btn" title="Window Shade"></div>
-                    <div class="titlebar-btn zoom-btn" id="zoom-btn" title="Zoom"></div>
+                    <div class="titlebar-btn shade-btn" id="shade-btn" title="Window Shade"
+                         data-balloon="Rolls up this window to show only its title bar."></div>
+                    <div class="titlebar-btn zoom-btn" id="zoom-btn" title="Zoom"
+                         data-balloon="Expands this window to fill the screen."></div>
                 </div>
             </div>
             <div class="window-body" id="main-window-body">
@@ -77,12 +114,14 @@
                             <span class="panel-header-icon">&#9834;</span>
                             Stations
                         </div>
-                        <div class="station-list" id="station-list">
-                            <!-- Populated by JS -->
+                        <div class="station-list" id="station-list"
+                             data-balloon="Your saved radio stations. Click any station to start playing.">
                         </div>
                         <div class="panel-footer">
-                            <button class="mac-btn" id="add-station-btn">Add Station...</button>
-                            <button class="mac-btn" id="remove-station-btn" disabled>Remove</button>
+                            <button class="mac-btn" id="add-station-btn"
+                                    data-balloon="Opens a dialog to add a new radio station by URL.">Add Station...</button>
+                            <button class="mac-btn" id="remove-station-btn" disabled
+                                    data-balloon="Removes the selected station from your list.">Remove</button>
                         </div>
                     </div>
 
@@ -95,23 +134,22 @@
                             </div>
                         </div>
                         <div class="station-info">
-                            <div class="station-info-name" id="current-station-name">Select a station</div>
+                            <div class="station-info-name" id="current-station-name">Click a station to play</div>
                             <div class="station-info-location" id="current-station-location">&nbsp;</div>
                         </div>
-                        <div class="visualizer-container">
+                        <div class="visualizer-container" data-balloon="Audio spectrum analyzer. Change the style from View menu.">
                             <canvas id="visualizer"></canvas>
-                            <div class="visualizer-label">SPECTRUM ANALYZER</div>
+                            <div class="visualizer-label" id="visualizer-label">RAINBOW SPECTRUM</div>
+                            <div class="crt-scanlines"></div>
                         </div>
                         <div class="player-controls">
                             <div class="transport-buttons">
-                                <button class="mac-btn transport-btn" id="play-btn" title="Play">
-                                    <span class="btn-icon">&#9654;</span> Play
-                                </button>
-                                <button class="mac-btn transport-btn" id="stop-btn" title="Stop" disabled>
+                                <button class="mac-btn transport-btn" id="stop-btn" title="Stop" disabled
+                                        data-balloon="Stops the currently playing station.">
                                     <span class="btn-icon">&#9632;</span> Stop
                                 </button>
                             </div>
-                            <div class="volume-control">
+                            <div class="volume-control" data-balloon="Adjusts the playback volume.">
                                 <span class="volume-icon-quiet">&#128264;</span>
                                 <input type="range" id="volume" min="0" max="100" value="75" class="mac-slider">
                                 <span class="volume-icon-loud">&#128266;</span>
@@ -121,11 +159,17 @@
                 </div>
                 <!-- Status Bar -->
                 <div class="status-bar" id="status-bar">
-                    <span class="status-text" id="status-text">Ready</span>
-                    <span class="status-right" id="status-bitrate"></span>
+                    <span class="status-text" id="status-text">Click a station to start listening</span>
+                    <span class="status-right" id="status-right"></span>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Balloon Help Tooltip -->
+    <div class="balloon" id="balloon" style="display:none">
+        <div class="balloon-pointer"></div>
+        <div class="balloon-content" id="balloon-content"></div>
     </div>
 
     <!-- Add Station Dialog -->
@@ -173,8 +217,8 @@
                     <div class="about-version">Version 1.0</div>
                     <div class="about-separator"></div>
                     <div class="about-text">
-                        A retro internet radio player.<br>
-                        Tune in to stations from around the world.
+                        A retro internet radio player<br>
+                        built for the love of music.
                     </div>
                     <div class="about-copyright">&copy; 2026</div>
                 </div>
@@ -185,25 +229,105 @@
         </div>
     </div>
 
-    <!-- Help Dialog -->
+    <!-- Help Dialog (Apple Guide style) -->
     <div class="dialog-overlay" id="help-dialog-overlay">
         <div class="window dialog help-dialog" id="help-dialog">
             <div class="window-titlebar">
                 <div class="window-title">Radio Garden Help</div>
             </div>
             <div class="window-body">
-                <div class="help-content">
-                    <p><strong>Getting Started</strong></p>
-                    <p>Click on a station in the list to begin playing. Use the transport controls to play and stop.</p>
-                    <p><strong>Adding Stations</strong></p>
-                    <p>Click "Add Station..." or press &#8984;N to add a new station. You need the station name and a direct stream URL (usually ending in /stream or similar).</p>
-                    <p><strong>Keyboard Shortcuts</strong></p>
-                    <p>&#8984;N &mdash; New Station<br>
-                    Space &mdash; Play/Stop<br>
-                    &#8984;V &mdash; Toggle Visualizer</p>
+                <div class="help-layout">
+                    <div class="help-sidebar">
+                        <div class="help-topic active" data-topic="getting-started">Getting Started</div>
+                        <div class="help-topic" data-topic="stations">Managing Stations</div>
+                        <div class="help-topic" data-topic="visualizer">The Visualizer</div>
+                        <div class="help-topic" data-topic="shortcuts">Keyboard Shortcuts</div>
+                    </div>
+                    <div class="help-body" id="help-body">
+                        <div class="help-page" id="help-getting-started">
+                            <h3>Getting Started</h3>
+                            <p><strong>Playing a station</strong> is simple: just click
+                            any station name in the list on the left. It starts
+                            playing immediately.</p>
+                            <p>Use the <strong>Stop</strong> button or press <strong>Space</strong>
+                            to stop playback. Click another station to switch.</p>
+                            <p>The <strong>volume slider</strong> on the right adjusts loudness.</p>
+                            <p><em>Tip: Enable "Balloon Help" from the Help menu to see
+                            explanations when you hover over any control.</em></p>
+                        </div>
+                        <div class="help-page" id="help-stations" style="display:none">
+                            <h3>Managing Stations</h3>
+                            <p>Click <strong>Add Station...</strong> or press <strong>&#8984;N</strong>
+                            to add a new station. You need a name and a direct stream URL
+                            (usually ending in /stream or similar).</p>
+                            <p>To <strong>remove</strong> a station, select it and click
+                            the <strong>Remove</strong> button.</p>
+                            <p>Your stations are saved in your browser and will be
+                            remembered next time you visit.</p>
+                        </div>
+                        <div class="help-page" id="help-visualizer" style="display:none">
+                            <h3>The Visualizer</h3>
+                            <p>The spectrum analyzer responds to the music with animated bars
+                            or waveforms. Choose from four styles in the <strong>View</strong> menu:</p>
+                            <p><strong>Rainbow Spectrum</strong> -- each frequency band gets its own
+                            color, from red (bass) to purple (treble).</p>
+                            <p><strong>VU Meter</strong> -- classic Winamp-style green-yellow-red
+                            gradient based on amplitude.</p>
+                            <p><strong>CRT Phosphor</strong> -- green-on-black terminal aesthetic
+                            with glow effects.</p>
+                            <p><strong>Oscilloscope</strong> -- real-time waveform display.</p>
+                        </div>
+                        <div class="help-page" id="help-shortcuts" style="display:none">
+                            <h3>Keyboard Shortcuts</h3>
+                            <table class="help-table">
+                                <tr><td><strong>Space</strong></td><td>Play / Stop</td></tr>
+                                <tr><td><strong>&#8984;N</strong></td><td>New Station</td></tr>
+                                <tr><td><strong>&#8984;1</strong></td><td>Show Window</td></tr>
+                                <tr><td><strong>&#8984;W</strong></td><td>Close Window</td></tr>
+                                <tr><td><strong>&#8984;Q</strong></td><td>Quit</td></tr>
+                                <tr><td><strong>&#8593; / &#8595;</strong></td><td>Navigate Stations</td></tr>
+                                <tr><td><strong>Enter</strong></td><td>Play Selected</td></tr>
+                                <tr><td><strong>Esc</strong></td><td>Close Dialog</td></tr>
+                            </table>
+                        </div>
+                    </div>
                 </div>
                 <div class="dialog-buttons">
                     <button class="mac-btn default-btn" id="help-ok-btn">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome Dialog -->
+    <div class="dialog-overlay" id="welcome-dialog-overlay">
+        <div class="window dialog welcome-dialog">
+            <div class="window-titlebar">
+                <div class="window-title">Welcome to Radio Garden</div>
+            </div>
+            <div class="window-body">
+                <div class="welcome-content">
+                    <div class="welcome-icon">&#128251;</div>
+                    <div class="welcome-steps">
+                        <div class="welcome-step">
+                            <span class="welcome-num">1</span>
+                            <span>Click any <strong>station</strong> to start listening instantly</span>
+                        </div>
+                        <div class="welcome-step">
+                            <span class="welcome-num">2</span>
+                            <span>Add your own stations with <strong>&#8984;N</strong> or the Add button</span>
+                        </div>
+                        <div class="welcome-step">
+                            <span class="welcome-num">3</span>
+                            <span>Switch <strong>visualizer styles</strong> from the View menu</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="dialog-buttons">
+                    <label class="welcome-checkbox">
+                        <input type="checkbox" id="welcome-dont-show"> Don't show again
+                    </label>
+                    <button class="mac-btn default-btn" id="welcome-ok-btn">Let's Go</button>
                 </div>
             </div>
         </div>
