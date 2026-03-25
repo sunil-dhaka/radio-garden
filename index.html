@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Garden</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Menu Bar -->
+    <div class="menu-bar" id="menu-bar">
+        <div class="menu-item" data-menu="apple">
+            <span class="apple-logo"></span>
+            <div class="menu-dropdown" id="dropdown-apple">
+                <div class="menu-dropdown-item" data-action="about">About Radio Garden</div>
+                <div class="menu-separator"></div>
+                <div class="menu-dropdown-item disabled">System Preferences...</div>
+            </div>
+        </div>
+        <div class="menu-item" data-menu="file">
+            File
+            <div class="menu-dropdown" id="dropdown-file">
+                <div class="menu-dropdown-item" data-action="add-station">
+                    New Station...
+                    <span class="shortcut">&#8984;N</span>
+                </div>
+                <div class="menu-separator"></div>
+                <div class="menu-dropdown-item" data-action="close-window">
+                    Close Window
+                    <span class="shortcut">&#8984;W</span>
+                </div>
+            </div>
+        </div>
+        <div class="menu-item" data-menu="stations">
+            Stations
+            <div class="menu-dropdown" id="dropdown-stations">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+        <div class="menu-item" data-menu="view">
+            View
+            <div class="menu-dropdown" id="dropdown-view">
+                <div class="menu-dropdown-item" data-action="toggle-visualizer-style">
+                    Visualizer: Bars
+                    <span class="shortcut">&#8984;V</span>
+                </div>
+            </div>
+        </div>
+        <div class="menu-item" data-menu="help">
+            Help
+            <div class="menu-dropdown" id="dropdown-help">
+                <div class="menu-dropdown-item" data-action="help">Radio Garden Help</div>
+            </div>
+        </div>
+        <div class="menu-clock" id="menu-clock"></div>
+    </div>
+
+    <!-- Desktop -->
+    <div class="desktop" id="desktop">
+
+        <!-- Main Window -->
+        <div class="window" id="main-window">
+            <div class="window-titlebar" id="main-titlebar">
+                <div class="titlebar-btn close-btn" id="close-btn" title="Close"></div>
+                <div class="window-title">Radio Garden</div>
+                <div class="titlebar-controls-right">
+                    <div class="titlebar-btn shade-btn" id="shade-btn" title="Window Shade"></div>
+                    <div class="titlebar-btn zoom-btn" id="zoom-btn" title="Zoom"></div>
+                </div>
+            </div>
+            <div class="window-body" id="main-window-body">
+                <div class="window-content">
+                    <!-- Station List Panel -->
+                    <div class="panel station-panel">
+                        <div class="panel-header">
+                            <span class="panel-header-icon">&#9834;</span>
+                            Stations
+                        </div>
+                        <div class="station-list" id="station-list">
+                            <!-- Populated by JS -->
+                        </div>
+                        <div class="panel-footer">
+                            <button class="mac-btn" id="add-station-btn">Add Station...</button>
+                            <button class="mac-btn" id="remove-station-btn" disabled>Remove</button>
+                        </div>
+                    </div>
+
+                    <!-- Player Panel -->
+                    <div class="panel player-panel">
+                        <div class="now-playing-header">
+                            <div class="now-playing-label" id="now-playing-label">
+                                <span class="blink-dot" id="blink-dot"></span>
+                                <span id="now-playing-text">NO SIGNAL</span>
+                            </div>
+                        </div>
+                        <div class="station-info">
+                            <div class="station-info-name" id="current-station-name">Select a station</div>
+                            <div class="station-info-location" id="current-station-location">&nbsp;</div>
+                        </div>
+                        <div class="visualizer-container">
+                            <canvas id="visualizer"></canvas>
+                            <div class="visualizer-label">SPECTRUM ANALYZER</div>
+                        </div>
+                        <div class="player-controls">
+                            <div class="transport-buttons">
+                                <button class="mac-btn transport-btn" id="play-btn" title="Play">
+                                    <span class="btn-icon">&#9654;</span> Play
+                                </button>
+                                <button class="mac-btn transport-btn" id="stop-btn" title="Stop" disabled>
+                                    <span class="btn-icon">&#9632;</span> Stop
+                                </button>
+                            </div>
+                            <div class="volume-control">
+                                <span class="volume-icon-quiet">&#128264;</span>
+                                <input type="range" id="volume" min="0" max="100" value="75" class="mac-slider">
+                                <span class="volume-icon-loud">&#128266;</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Status Bar -->
+                <div class="status-bar" id="status-bar">
+                    <span class="status-text" id="status-text">Ready</span>
+                    <span class="status-right" id="status-bitrate"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Station Dialog -->
+    <div class="dialog-overlay" id="add-dialog-overlay">
+        <div class="window dialog" id="add-station-dialog">
+            <div class="window-titlebar">
+                <div class="window-title">Add New Station</div>
+            </div>
+            <div class="window-body">
+                <div class="dialog-content">
+                    <div class="dialog-icon">&#9834;</div>
+                    <div class="dialog-form">
+                        <div class="form-row">
+                            <label class="form-label" for="input-name">Name:</label>
+                            <input type="text" id="input-name" class="mac-input" placeholder="My Station">
+                        </div>
+                        <div class="form-row">
+                            <label class="form-label" for="input-url">Stream URL:</label>
+                            <input type="text" id="input-url" class="mac-input" placeholder="https://stream.example.com/live">
+                        </div>
+                        <div class="form-row">
+                            <label class="form-label" for="input-location">Location:</label>
+                            <input type="text" id="input-location" class="mac-input" placeholder="City, Country">
+                        </div>
+                    </div>
+                </div>
+                <div class="dialog-buttons">
+                    <button class="mac-btn" id="dialog-cancel-btn">Cancel</button>
+                    <button class="mac-btn default-btn" id="dialog-save-btn">Add Station</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Dialog -->
+    <div class="dialog-overlay" id="about-dialog-overlay">
+        <div class="window dialog about-dialog" id="about-dialog">
+            <div class="window-titlebar">
+                <div class="window-title">About Radio Garden</div>
+            </div>
+            <div class="window-body">
+                <div class="about-content">
+                    <div class="about-icon">&#128251;</div>
+                    <div class="about-name">Radio Garden</div>
+                    <div class="about-version">Version 1.0</div>
+                    <div class="about-separator"></div>
+                    <div class="about-text">
+                        A retro internet radio player.<br>
+                        Tune in to stations from around the world.
+                    </div>
+                    <div class="about-copyright">&copy; 2026</div>
+                </div>
+                <div class="dialog-buttons">
+                    <button class="mac-btn default-btn" id="about-ok-btn">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Dialog -->
+    <div class="dialog-overlay" id="help-dialog-overlay">
+        <div class="window dialog help-dialog" id="help-dialog">
+            <div class="window-titlebar">
+                <div class="window-title">Radio Garden Help</div>
+            </div>
+            <div class="window-body">
+                <div class="help-content">
+                    <p><strong>Getting Started</strong></p>
+                    <p>Click on a station in the list to begin playing. Use the transport controls to play and stop.</p>
+                    <p><strong>Adding Stations</strong></p>
+                    <p>Click "Add Station..." or press &#8984;N to add a new station. You need the station name and a direct stream URL (usually ending in /stream or similar).</p>
+                    <p><strong>Keyboard Shortcuts</strong></p>
+                    <p>&#8984;N &mdash; New Station<br>
+                    Space &mdash; Play/Stop<br>
+                    &#8984;V &mdash; Toggle Visualizer</p>
+                </div>
+                <div class="dialog-buttons">
+                    <button class="mac-btn default-btn" id="help-ok-btn">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audio-player" preload="none"></audio>
+    <script src="js/app.js"></script>
+</body>
+</html>

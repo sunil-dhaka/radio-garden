@@ -1,0 +1,896 @@
+/* ============================================================
+   Radio Garden - Mac OS 9 Platinum Theme
+   ============================================================ */
+
+/* -- Reset & Base ------------------------------------------ */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --platinum:         #C0C0C0;
+    --platinum-light:   #D8D8D8;
+    --platinum-lighter: #E8E8E8;
+    --platinum-dark:    #A0A0A0;
+    --platinum-darker:  #808080;
+    --platinum-darkest: #404040;
+    --white:            #FFFFFF;
+    --black:            #000000;
+    --highlight:        #3366CC;
+    --highlight-text:   #FFFFFF;
+    --desktop-bg:       #6666AA;
+    --window-bg:        #D4D4D4;
+    --content-bg:       #FFFFFF;
+    --panel-bg:         #ECECEC;
+    --inset-light:      #A0A0A0;
+    --inset-dark:       #FFFFFF;
+    --visualizer-bg:    #0a0a14;
+    --visualizer-glow:  #00cc44;
+    --visualizer-bar:   #00ff55;
+    --error-red:        #CC3333;
+
+    --font-system: "Geneva", "Verdana", "Lucida Grande", "Segoe UI", sans-serif;
+    --font-mono:   "Monaco", "Menlo", "Consolas", "Courier New", monospace;
+
+    --titlebar-h:   22px;
+    --menubar-h:    24px;
+    --statusbar-h:  22px;
+    --border-radius: 0px;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-system);
+    font-size: 12px;
+    color: var(--black);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+}
+
+/* -- Menu Bar --------------------------------------------- */
+.menu-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--menubar-h);
+    background: var(--platinum);
+    border-bottom: 1px solid var(--platinum-darker);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    z-index: 9999;
+    box-shadow: 0 1px 0 var(--white) inset;
+}
+
+.menu-item {
+    position: relative;
+    padding: 2px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: default;
+    border-radius: 0;
+    line-height: 20px;
+}
+
+.menu-item:hover,
+.menu-item.open {
+    background: var(--highlight);
+    color: var(--highlight-text);
+}
+
+.menu-item[data-menu="apple"] {
+    padding: 2px 10px;
+    font-size: 14px;
+}
+
+.apple-logo {
+    display: inline-block;
+    width: 14px;
+    height: 16px;
+    background: var(--black);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 16'%3E%3Cpath d='M10.5 0C9.2.1 7.7 1 6.9 2c-.7.8-1.3 2.1-1.1 3.4 1.4.1 2.8-.7 3.6-1.7.7-.9 1.3-2.2 1.1-3.7zM13.4 5.6c-.8.9-1.8 1.5-2.9 1.5-1.4 0-1.9-.7-2.9-.7s-1.8.7-3 .7c-1.2 0-2.4-.8-3.3-2C.3 3.8.6 1.6 2 .4 2.8-.3 3.9-.6 4.9-.6c1.2 0 2 .7 3 .7s1.6-.7 3-.7c.9 0 1.8.3 2.5.9-2.2 1.2-1.8 4.2.3 5.3z' transform='translate(0 3)'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 16'%3E%3Cpath d='M10.5 0C9.2.1 7.7 1 6.9 2c-.7.8-1.3 2.1-1.1 3.4 1.4.1 2.8-.7 3.6-1.7.7-.9 1.3-2.2 1.1-3.7zM13.4 5.6c-.8.9-1.8 1.5-2.9 1.5-1.4 0-1.9-.7-2.9-.7s-1.8.7-3 .7c-1.2 0-2.4-.8-3.3-2C.3 3.8.6 1.6 2 .4 2.8-.3 3.9-.6 4.9-.6c1.2 0 2 .7 3 .7s1.6-.7 3-.7c.9 0 1.8.3 2.5.9-2.2 1.2-1.8 4.2.3 5.3z' transform='translate(0 3)'/%3E%3C/svg%3E");
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    vertical-align: middle;
+}
+
+.menu-item[data-menu="apple"]:hover .apple-logo,
+.menu-item[data-menu="apple"].open .apple-logo {
+    background: var(--white);
+}
+
+.menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    background: var(--white);
+    border: 1px solid var(--black);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.35);
+    z-index: 10000;
+    padding: 2px 0;
+}
+
+.menu-item.open > .menu-dropdown {
+    display: block;
+}
+
+.menu-dropdown-item {
+    padding: 3px 24px 3px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    white-space: nowrap;
+    color: var(--black);
+    cursor: default;
+}
+
+.menu-dropdown-item:hover:not(.disabled) {
+    background: var(--highlight);
+    color: var(--highlight-text);
+}
+
+.menu-dropdown-item.disabled {
+    color: var(--platinum-darker);
+}
+
+.menu-dropdown-item .shortcut {
+    margin-left: 24px;
+    font-size: 11px;
+    color: inherit;
+}
+
+.menu-dropdown-item.station-menu-item::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    margin-left: -14px;
+    border-radius: 50%;
+    background: transparent;
+    vertical-align: middle;
+}
+
+.menu-dropdown-item.station-menu-item.active::before {
+    background: var(--visualizer-glow);
+    box-shadow: 0 0 4px var(--visualizer-glow);
+}
+
+.menu-separator {
+    height: 1px;
+    background: var(--platinum-dark);
+    margin: 3px 0;
+}
+
+.menu-clock {
+    margin-left: auto;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.5px;
+    padding-right: 4px;
+}
+
+/* -- Desktop ---------------------------------------------- */
+.desktop {
+    position: fixed;
+    top: var(--menubar-h);
+    left: 0; right: 0; bottom: 0;
+    background: var(--desktop-bg);
+    /* Classic Mac desktop pattern */
+    background-image:
+        radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 4px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* -- Window ----------------------------------------------- */
+.window {
+    background: var(--window-bg);
+    border: 1px solid var(--black);
+    box-shadow:
+        inset 1px 1px 0 var(--white),
+        inset -1px -1px 0 var(--platinum-dark),
+        2px 2px 0 rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+}
+
+#main-window {
+    width: 680px;
+    height: 480px;
+    position: absolute;
+    min-width: 500px;
+    min-height: 350px;
+}
+
+#main-window.shaded {
+    height: auto !important;
+}
+
+#main-window.shaded .window-body {
+    display: none;
+}
+
+.window-titlebar {
+    height: var(--titlebar-h);
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    cursor: default;
+    flex-shrink: 0;
+    /* Pinstripes */
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            var(--platinum) 0px,
+            var(--platinum) 1px,
+            var(--platinum-dark) 1px,
+            var(--platinum-dark) 2px
+        );
+    border-bottom: 1px solid var(--platinum-darker);
+    position: relative;
+}
+
+.window-titlebar::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    height: 1px;
+    background: var(--white);
+    opacity: 0.3;
+}
+
+.titlebar-btn {
+    width: 13px;
+    height: 13px;
+    border: 1px solid var(--black);
+    background: var(--platinum);
+    box-shadow:
+        inset 1px 1px 0 var(--white),
+        inset -1px -1px 0 var(--platinum-darker);
+    flex-shrink: 0;
+    cursor: default;
+    position: relative;
+}
+
+.titlebar-btn:active {
+    background: var(--platinum-darker);
+    box-shadow:
+        inset 1px 1px 0 var(--platinum-darker),
+        inset -1px -1px 0 var(--white);
+}
+
+.close-btn {
+    margin-right: 8px;
+}
+
+.titlebar-controls-right {
+    display: flex;
+    gap: 2px;
+    margin-left: 8px;
+}
+
+.shade-btn::after {
+    content: '';
+    position: absolute;
+    top: 5px; left: 2px; right: 2px;
+    height: 1px;
+    background: var(--black);
+}
+
+.zoom-btn::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 7px; height: 7px;
+    border: 1px solid var(--black);
+}
+
+.window-title {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.3px;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.window-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.window-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    border: 2px solid;
+    border-color: var(--platinum-darker) var(--white) var(--white) var(--platinum-darker);
+    margin: 4px 4px 0 4px;
+}
+
+/* -- Panels ----------------------------------------------- */
+.panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.station-panel {
+    width: 220px;
+    border-right: 1px solid var(--platinum-darker);
+    background: var(--white);
+    flex-shrink: 0;
+}
+
+.player-panel {
+    flex: 1;
+    background: var(--panel-bg);
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-header {
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--platinum-darkest);
+    background: var(--platinum-light);
+    border-bottom: 1px solid var(--platinum-darker);
+    box-shadow: 0 1px 0 var(--white) inset;
+}
+
+.panel-header-icon {
+    margin-right: 4px;
+}
+
+.panel-footer {
+    padding: 4px 6px;
+    display: flex;
+    gap: 4px;
+    background: var(--platinum-light);
+    border-top: 1px solid var(--platinum-darker);
+    box-shadow: 0 1px 0 var(--white) inset;
+}
+
+/* -- Station List ----------------------------------------- */
+.station-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.station-item {
+    padding: 6px 8px 6px 10px;
+    border-bottom: 1px solid var(--platinum-lighter);
+    cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: none;
+}
+
+.station-item:hover {
+    background: #E8E8F0;
+}
+
+.station-item.selected {
+    background: var(--highlight);
+    color: var(--highlight-text);
+}
+
+.station-item-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: transparent;
+    flex-shrink: 0;
+    transition: background 0.3s;
+}
+
+.station-item.playing .station-item-indicator {
+    background: var(--visualizer-glow);
+    box-shadow: 0 0 6px var(--visualizer-glow);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.station-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.station-item-name {
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.station-item-location {
+    font-size: 10px;
+    color: var(--platinum-darker);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.station-item.selected .station-item-location {
+    color: rgba(255,255,255,0.7);
+}
+
+/* -- Now Playing ------------------------------------------ */
+.now-playing-header {
+    padding: 6px 10px;
+    background: var(--platinum-light);
+    border-bottom: 1px solid var(--platinum-darker);
+    box-shadow: 0 1px 0 var(--white) inset;
+}
+
+.now-playing-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--platinum-darker);
+}
+
+.now-playing-label.active {
+    color: var(--visualizer-glow);
+    text-shadow: 0 0 8px rgba(0,204,68,0.3);
+}
+
+.blink-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--platinum-darker);
+}
+
+.now-playing-label.active .blink-dot {
+    background: var(--visualizer-glow);
+    box-shadow: 0 0 4px var(--visualizer-glow);
+    animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.station-info {
+    padding: 8px 12px;
+    text-align: center;
+}
+
+.station-info-name {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.station-info-location {
+    font-size: 11px;
+    color: var(--platinum-darker);
+    margin-top: 2px;
+}
+
+/* -- Visualizer ------------------------------------------- */
+.visualizer-container {
+    flex: 1;
+    margin: 0 10px;
+    background: var(--visualizer-bg);
+    border: 2px solid;
+    border-color: var(--platinum-darker) var(--white) var(--white) var(--platinum-darker);
+    position: relative;
+    min-height: 100px;
+    overflow: hidden;
+}
+
+#visualizer {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.visualizer-label {
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    font-size: 8px;
+    font-family: var(--font-mono);
+    color: rgba(0,204,68,0.25);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+/* -- Player Controls -------------------------------------- */
+.player-controls {
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--platinum-light);
+    border-top: 1px solid var(--platinum-darker);
+    box-shadow: 0 1px 0 var(--white) inset;
+}
+
+.transport-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.transport-btn {
+    min-width: 70px;
+}
+
+.transport-btn .btn-icon {
+    font-size: 10px;
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+}
+
+.volume-icon-quiet,
+.volume-icon-loud {
+    font-size: 12px;
+    color: var(--platinum-darker);
+}
+
+/* -- Mac Slider ------------------------------------------- */
+.mac-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 6px;
+    background: var(--platinum-darker);
+    border: 1px solid;
+    border-color: var(--platinum-darkest) var(--white) var(--white) var(--platinum-darkest);
+    outline: none;
+    cursor: default;
+}
+
+.mac-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 18px;
+    background: var(--platinum);
+    border: 1px solid var(--platinum-darkest);
+    box-shadow:
+        inset 1px 1px 0 var(--white),
+        inset -1px -1px 0 var(--platinum-darker);
+    cursor: default;
+    position: relative;
+}
+
+.mac-slider::-moz-range-thumb {
+    width: 14px;
+    height: 18px;
+    background: var(--platinum);
+    border: 1px solid var(--platinum-darkest);
+    box-shadow:
+        inset 1px 1px 0 var(--white),
+        inset -1px -1px 0 var(--platinum-darker);
+    cursor: default;
+    border-radius: 0;
+}
+
+/* -- Mac Buttons ------------------------------------------ */
+.mac-btn {
+    font-family: var(--font-system);
+    font-size: 12px;
+    padding: 3px 14px;
+    background: var(--platinum);
+    border: 1px solid var(--platinum-darkest);
+    box-shadow:
+        inset 1px 1px 0 var(--white),
+        inset -1px -1px 0 var(--platinum-darker);
+    cursor: default;
+    outline: none;
+    white-space: nowrap;
+    border-radius: 4px;
+    color: var(--black);
+}
+
+.mac-btn:hover:not(:disabled) {
+    background: var(--platinum-light);
+}
+
+.mac-btn:active:not(:disabled) {
+    background: var(--platinum-darker);
+    box-shadow:
+        inset 1px 1px 0 var(--platinum-darker),
+        inset -1px -1px 0 var(--white);
+    color: var(--white);
+}
+
+.mac-btn:disabled {
+    color: var(--platinum-darker);
+    background: var(--platinum);
+}
+
+.mac-btn.default-btn {
+    box-shadow:
+        inset 1px 1px 0 var(--white),
+        inset -1px -1px 0 var(--platinum-darker),
+        0 0 0 2px var(--black);
+    font-weight: bold;
+}
+
+.mac-btn.default-btn:active:not(:disabled) {
+    box-shadow:
+        inset 1px 1px 0 var(--platinum-darker),
+        inset -1px -1px 0 var(--white),
+        0 0 0 2px var(--black);
+}
+
+.mac-btn.playing {
+    background: #889988;
+    color: var(--white);
+}
+
+/* -- Mac Input -------------------------------------------- */
+.mac-input {
+    font-family: var(--font-system);
+    font-size: 12px;
+    padding: 3px 6px;
+    background: var(--white);
+    border: 2px solid;
+    border-color: var(--platinum-darker) var(--white) var(--white) var(--platinum-darker);
+    outline: none;
+    width: 100%;
+}
+
+.mac-input:focus {
+    border-color: var(--highlight) var(--highlight) var(--highlight) var(--highlight);
+}
+
+/* -- Status Bar ------------------------------------------- */
+.status-bar {
+    height: var(--statusbar-h);
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--platinum-darkest);
+    background: var(--platinum);
+    border-top: 1px solid var(--platinum-darker);
+    box-shadow: 0 1px 0 var(--white) inset;
+    margin: 0 4px 4px 4px;
+    border: 1px solid;
+    border-color: var(--platinum-darker) var(--white) var(--white) var(--platinum-darker);
+}
+
+.status-right {
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+
+/* -- Dialogs ---------------------------------------------- */
+.dialog-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: transparent;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.dialog-overlay.visible {
+    display: flex;
+}
+
+.dialog {
+    width: 380px;
+    box-shadow:
+        inset 1px 1px 0 var(--white),
+        inset -1px -1px 0 var(--platinum-dark),
+        4px 4px 0 rgba(0,0,0,0.5);
+}
+
+.dialog-content {
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+}
+
+.dialog-icon {
+    font-size: 36px;
+    flex-shrink: 0;
+    width: 48px;
+    text-align: center;
+}
+
+.dialog-form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.form-label {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 16px 12px;
+}
+
+/* -- About Dialog ----------------------------------------- */
+.about-dialog {
+    width: 300px;
+}
+
+.about-content {
+    padding: 20px;
+    text-align: center;
+}
+
+.about-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+}
+
+.about-name {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.about-version {
+    font-size: 11px;
+    color: var(--platinum-darker);
+}
+
+.about-separator {
+    height: 1px;
+    background: var(--platinum-darker);
+    margin: 12px 0;
+}
+
+.about-text {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--platinum-darkest);
+}
+
+.about-copyright {
+    font-size: 10px;
+    color: var(--platinum-darker);
+    margin-top: 12px;
+}
+
+/* -- Help Dialog ------------------------------------------ */
+.help-dialog {
+    width: 360px;
+}
+
+.help-content {
+    padding: 16px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.help-content p {
+    margin-bottom: 8px;
+}
+
+.help-content strong {
+    display: block;
+    margin-top: 8px;
+}
+
+/* -- Custom Scrollbar (Mac OS Platinum) ------------------- */
+.station-list::-webkit-scrollbar {
+    width: 16px;
+}
+
+.station-list::-webkit-scrollbar-track {
+    background: var(--platinum-lighter);
+    border-left: 1px solid var(--platinum-darker);
+}
+
+.station-list::-webkit-scrollbar-thumb {
+    background: var(--platinum);
+    border: 1px solid;
+    border-color: var(--white) var(--platinum-darker) var(--platinum-darker) var(--white);
+    min-height: 24px;
+}
+
+.station-list::-webkit-scrollbar-button {
+    height: 16px;
+    background: var(--platinum);
+    border: 1px solid;
+    border-color: var(--white) var(--platinum-darker) var(--platinum-darker) var(--white);
+}
+
+/* -- Drag Cursor ------------------------------------------ */
+.window-titlebar.dragging,
+.window-titlebar.dragging * {
+    cursor: grabbing !important;
+}
+
+/* -- Selection highlight for playing station -------------- */
+.station-item.selected.playing .station-item-indicator {
+    box-shadow: 0 0 6px #88ffaa;
+}
+
+/* -- Empty state ------------------------------------------ */
+.station-list-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--platinum-darker);
+    font-size: 11px;
+    font-style: italic;
+}
+
+/* -- Loading spinner in status bar ------------------------ */
+.status-bar.loading .status-text::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--platinum-darker);
+    border-top-color: var(--highlight);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* -- Responsive (keep desktop feel but fit screens) ------- */
+@media (max-width: 720px) {
+    #main-window {
+        width: calc(100vw - 20px);
+        height: calc(100vh - var(--menubar-h) - 20px);
+    }
+    .station-panel {
+        width: 160px;
+    }
+}
+
+@media (max-height: 540px) {
+    #main-window {
+        height: calc(100vh - var(--menubar-h) - 10px);
+    }
+}
