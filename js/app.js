@@ -717,65 +717,53 @@ function closeAllMenus() {
     openMenuId = null;
 }
 
-// Menu open/close: use BOTH mousedown and click for maximum browser compat
+// ---- Menu System (simplified, no stopPropagation conflicts) ----
+
+// 1) Toggle menus on click of the menu-item label
 document.querySelectorAll('.menu-item[data-menu]').forEach(item => {
-    let handledByMousedown = false;
-
-    item.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        handledByMousedown = true;
-        const menuId = item.dataset.menu;
-        if (openMenuId === menuId) closeAllMenus();
-        else openMenu(menuId);
-    });
-
     item.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // Only handle if mousedown didn't fire (touch devices, etc.)
-        if (handledByMousedown) { handledByMousedown = false; return; }
+        // Ignore clicks that landed on a dropdown item inside this menu
+        if (e.target.closest('.menu-dropdown-item') || e.target.closest('.menu-separator')) return;
         const menuId = item.dataset.menu;
         if (openMenuId === menuId) closeAllMenus();
         else openMenu(menuId);
     });
-
+    // Hover to switch between open menus
     item.addEventListener('mouseenter', () => {
-        if (openMenuId && item.dataset.menu !== openMenuId) {
-            openMenu(item.dataset.menu);
-        }
+        if (openMenuId && item.dataset.menu !== openMenuId) openMenu(item.dataset.menu);
     });
 });
 
-// Close menus when clicking outside
-document.addEventListener('mousedown', (e) => {
-    if (openMenuId && !e.target.closest('.menu-bar')) closeAllMenus();
+// 2) Handle dropdown-item actions at the dropdown level (event delegation)
+document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+    dropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.menu-dropdown-item');
+        if (!item || item.classList.contains('disabled')) return;
+        e.stopPropagation(); // Prevent the menu-item toggle from firing
+
+        const action = item.dataset.action;
+        const stationId = item.dataset.stationId;
+
+        if (action === 'about') showAbout();
+        else if (action === 'help') showHelp();
+        else if (action === 'add-station') showAddDialog();
+        else if (action === 'close-window') closeWindow();
+        else if (action === 'quit') quitApp();
+        else if (action === 'show-window') showWindow();
+        else if (action === 'toggle-balloons') toggleBalloonHelp();
+        else if (action === 'viz-rainbow') setVizMode('rainbow');
+        else if (action === 'viz-vu') setVizMode('vu');
+        else if (action === 'viz-crt') setVizMode('crt');
+        else if (action === 'viz-scope') setVizMode('scope');
+        else if (stationId) startPlayback(stationId);
+
+        closeAllMenus();
+    });
 });
+
+// 3) Close menus when clicking anywhere outside the menu bar
 document.addEventListener('click', (e) => {
     if (openMenuId && !e.target.closest('.menu-bar')) closeAllMenus();
-});
-
-// Menu dropdown item actions
-document.addEventListener('click', (e) => {
-    const dropdownItem = e.target.closest('.menu-dropdown-item');
-    if (!dropdownItem || dropdownItem.classList.contains('disabled')) return;
-
-    const action = dropdownItem.dataset.action;
-    const stationId = dropdownItem.dataset.stationId;
-
-    if (action === 'about') showAbout();
-    else if (action === 'help') showHelp();
-    else if (action === 'add-station') showAddDialog();
-    else if (action === 'close-window') closeWindow();
-    else if (action === 'quit') quitApp();
-    else if (action === 'show-window') showWindow();
-    else if (action === 'toggle-balloons') toggleBalloonHelp();
-    else if (action === 'viz-rainbow') setVizMode('rainbow');
-    else if (action === 'viz-vu') setVizMode('vu');
-    else if (action === 'viz-crt') setVizMode('crt');
-    else if (action === 'viz-scope') setVizMode('scope');
-    else if (stationId) startPlayback(stationId);
-
-    closeAllMenus();
 });
 
 function updateStationsMenu() {
