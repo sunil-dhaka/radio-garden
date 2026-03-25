@@ -48,8 +48,8 @@ let analyser = null;
 let sourceNode = null;
 let useFakeVisualizer = false;
 let animFrameId = null;
-let fakeBarHeights = [];
 const BAR_COUNT = 32;
+let fakeBarHeights = new Array(BAR_COUNT).fill(0);
 
 function initAudioContext() {
     if (audioContext) return;
@@ -66,7 +66,6 @@ function initAudioContext() {
         useFakeVisualizer = true;
     }
 
-    for (let i = 0; i < BAR_COUNT; i++) fakeBarHeights.push(0);
 }
 
 function resizeCanvas() {
@@ -667,6 +666,7 @@ function centerWindow() {
     const y = (desktop.clientHeight - win.offsetHeight) / 2;
     win.style.left = x + 'px';
     win.style.top = y + 'px';
+    win.style.transform = 'none';
 }
 
 /* -- Init ------------------------------------------------- */
