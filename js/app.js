@@ -1,5 +1,5 @@
 /* ============================================================
-   Radio Garden - Application Logic (v2)
+   Radio Garden - Application Logic (v3)
    ============================================================ */
 
 const DEFAULT_STATIONS = [
@@ -15,11 +15,23 @@ const DEFAULT_STATIONS = [
         location: 'Pali, India',
         streamUrl: 'https://stream.zeno.fm/vq6p5vxb4v8uv',
     },
+    {
+        id: 'kishore-kumar-radio',
+        name: 'Kishore Kumar Radio',
+        location: 'Mumbai, India',
+        streamUrl: 'https://radio.garden/api/ara/content/listen/sG9ZZzTf/channel.mp3',
+    },
 ];
 
-const STORAGE_KEY = 'radio-garden-stations';
+const STORAGE_KEY = 'radio-garden-stations-v2';
 const ONBOARDED_KEY = 'radio-garden-onboarded';
 const VIZ_KEY = 'radio-garden-viz';
+
+const RADIO_GARDEN_REGEX = /\/listen\/[^/]+\/([a-zA-Z0-9_]+)/;
+const CORS_PROXIES = [
+    url => 'https://corsproxy.io/?' + encodeURIComponent(url),
+    url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+];
 
 /* -- State ------------------------------------------------ */
 let stations = [];
@@ -27,7 +39,9 @@ let selectedStationId = null;
 let playingStationId = null;
 let vizMode = localStorage.getItem(VIZ_KEY) || 'rainbow';
 let isPlaying = false;
+let isBuffering = false;
 let balloonHelpEnabled = false;
+let resolvedStation = null; // For add-station dialog
 
 /* -- DOM refs --------------------------------------------- */
 const audio = document.getElementById('audio-player');
@@ -62,24 +76,11 @@ const VIZ_LABELS = {
     scope: 'OSCILLOSCOPE',
 };
 
-// Winamp-style VU gradient colors (top=red to bottom=green)
-const VU_COLORS = [
-    '#EF3110', '#CE2910', '#D65A00', '#D66600',
-    '#D67300', '#C67B08', '#DEA518', '#D6B521',
-    '#BDDE29', '#94DE21', '#29CE10', '#32BE10',
-    '#39B510', '#319C08', '#299400', '#188408',
-];
-
-function initAudioContext() {
-    // No-op: we use simulated visualizer to avoid CORS issues with
-    // cross-origin radio streams. See commit history for details.
-}
-
 function resizeCanvas() {
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
-    heatGradient = null; // Force rebuild on next draw
+    heatGradient = null;
 }
 
 /* -- Visualizer Drawing ----------------------------------- */
@@ -87,34 +88,26 @@ function drawVisualizer() {
     animFrameId = requestAnimationFrame(drawVisualizer);
     const w = canvas.width;
     const h = canvas.height;
-
     if (w === 0 || h === 0) return;
 
-    // CRT persistence: fade previous frame instead of clearing
     ctx.fillStyle = vizMode === 'scope'
         ? 'rgba(8, 8, 15, 0.3)'
         : 'rgba(8, 8, 15, 0.45)';
     ctx.fillRect(0, 0, w, h);
 
-    // Subtle grid
-    ctx.strokeStyle = vizMode === 'crt'
+    // Grid
+    const gridColor = vizMode === 'crt'
         ? 'rgba(0, 204, 68, 0.05)'
         : 'rgba(255, 255, 255, 0.02)';
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     for (let gy = 0; gy < h; gy += 24) {
-        ctx.beginPath();
-        ctx.moveTo(0, gy);
-        ctx.lineTo(w, gy);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
     }
     for (let gx = 0; gx < w; gx += 24) {
-        ctx.beginPath();
-        ctx.moveTo(gx, 0);
-        ctx.lineTo(gx, h);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
     }
 
-    // Update bar data
     updateBarData(h);
 
     switch (vizMode) {
@@ -126,10 +119,11 @@ function drawVisualizer() {
 }
 
 function updateBarData(h) {
+    const active = isPlaying || isBuffering;
     const maxH = h * 0.82;
     for (let i = 0; i < BAR_COUNT; i++) {
         let target;
-        if (isPlaying) {
+        if (active) {
             const t = Date.now();
             target = (
                 Math.sin(t / 280 + i * 0.65) * 0.25 +
@@ -139,30 +133,26 @@ function updateBarData(h) {
                 Math.cos(t / 400 + i * 3.1) * 0.08 +
                 0.38
             ) * maxH;
-            // Add micro-jitter for liveliness
             target += (Math.random() - 0.5) * 3;
             target = Math.max(2, target);
+            if (isBuffering) target *= 0.4; // Lower bars while buffering
         } else {
             target = 0;
         }
 
-        // Smooth approach
         fakeBarHeights[i] += (target - fakeBarHeights[i]) * 0.18;
 
-        // Display with gravity falloff
         if (fakeBarHeights[i] >= displayHeights[i]) {
             displayHeights[i] = fakeBarHeights[i];
         } else {
             displayHeights[i] *= 0.93;
         }
-
         if (displayHeights[i] < 1) displayHeights[i] = 0;
 
-        // Peak hold
         if (displayHeights[i] >= peakHeights[i]) {
             peakHeights[i] = displayHeights[i];
             peakVelocity[i] = 0.5;
-            peakHold[i] = 25; // frames to hold
+            peakHold[i] = 25;
         } else if (peakHold[i] > 0) {
             peakHold[i]--;
         } else {
@@ -179,19 +169,15 @@ function barLayout(w) {
     return { barW, gap };
 }
 
-/* -- Rainbow Spectrum Mode -------------------------------- */
 function drawRainbow(w, h) {
     const { barW, gap } = barLayout(w);
-
     for (let i = 0; i < BAR_COUNT; i++) {
         const barH = displayHeights[i];
         if (barH < 1) continue;
-
         const x = i * (barW + gap) + gap / 2;
         const y = h - barH;
         const hue = (i / BAR_COUNT) * 280;
 
-        // Glow layer
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.25;
@@ -201,7 +187,6 @@ function drawRainbow(w, h) {
         ctx.fillRect(x, y, barW, barH);
         ctx.restore();
 
-        // Solid bar
         const grad = ctx.createLinearGradient(x, y, x, h);
         grad.addColorStop(0, `hsl(${hue}, 100%, 65%)`);
         grad.addColorStop(0.4, `hsl(${hue}, 95%, 50%)`);
@@ -209,45 +194,34 @@ function drawRainbow(w, h) {
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, barW, barH);
 
-        // Bright cap
         if (barH > 4) {
             ctx.fillStyle = `hsl(${hue}, 100%, 80%)`;
             ctx.fillRect(x, y, barW, 2);
         }
 
-        // Peak indicator
         if (peakHeights[i] > 2) {
-            const peakY = h - peakHeights[i];
             ctx.fillStyle = `hsl(${hue}, 100%, 90%)`;
             ctx.shadowColor = `hsl(${hue}, 100%, 70%)`;
             ctx.shadowBlur = 4;
-            ctx.fillRect(x, peakY, barW, 2);
+            ctx.fillRect(x, h - peakHeights[i], barW, 2);
             ctx.shadowBlur = 0;
         }
     }
-
     drawReflection(w, h);
 }
 
-/* -- VU Meter Mode (Winamp) ------------------------------- */
 function drawVU(w, h) {
     const { barW, gap } = barLayout(w);
 
-    // Build heat gradient canvas once
     if (!heatGradient || heatGradient.height !== Math.ceil(h)) {
         const off = document.createElement('canvas');
-        off.width = 1;
-        off.height = Math.ceil(h);
+        off.width = 1; off.height = Math.ceil(h);
         const octx = off.getContext('2d');
         const g = octx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0.0,  '#EF3110');
-        g.addColorStop(0.15, '#D65A00');
-        g.addColorStop(0.30, '#DEA518');
-        g.addColorStop(0.45, '#D6B521');
-        g.addColorStop(0.60, '#BDDE29');
-        g.addColorStop(0.75, '#29CE10');
-        g.addColorStop(0.90, '#319C08');
-        g.addColorStop(1.0,  '#188408');
+        g.addColorStop(0.0, '#EF3110'); g.addColorStop(0.15, '#D65A00');
+        g.addColorStop(0.30, '#DEA518'); g.addColorStop(0.45, '#D6B521');
+        g.addColorStop(0.60, '#BDDE29'); g.addColorStop(0.75, '#29CE10');
+        g.addColorStop(0.90, '#319C08'); g.addColorStop(1.0, '#188408');
         octx.fillStyle = g;
         octx.fillRect(0, 0, 1, h);
         heatGradient = off;
@@ -256,63 +230,48 @@ function drawVU(w, h) {
     for (let i = 0; i < BAR_COUNT; i++) {
         const barH = displayHeights[i];
         if (barH < 1) continue;
-
         const x = i * (barW + gap) + gap / 2;
         const srcY = heatGradient.height - barH;
-
-        // Draw clipped gradient
         ctx.drawImage(heatGradient, 0, srcY, 1, barH, x, h - barH, barW, barH);
 
-        // Glow
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.15;
         ctx.drawImage(heatGradient, 0, srcY, 1, barH, x, h - barH, barW, barH);
         ctx.restore();
 
-        // Peak indicator
         if (peakHeights[i] > 2) {
-            const peakY = h - peakHeights[i];
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(x, peakY, barW, 2);
+            ctx.fillRect(x, h - peakHeights[i], barW, 2);
         }
     }
-
     drawReflection(w, h);
 }
 
-/* -- CRT Phosphor Mode ------------------------------------ */
 function drawCRT(w, h) {
     const { barW, gap } = barLayout(w);
-
     for (let i = 0; i < BAR_COUNT; i++) {
         const barH = displayHeights[i];
         if (barH < 1) continue;
-
         const x = i * (barW + gap) + gap / 2;
         const y = h - barH;
 
-        // Wide outer glow
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.2;
-        ctx.shadowColor = '#00CC44';
-        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#00CC44'; ctx.shadowBlur = 18;
         ctx.fillStyle = '#00CC44';
         ctx.fillRect(x, y, barW, barH);
         ctx.restore();
 
-        // Mid bloom
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.4;
-        ctx.shadowColor = '#00FF55';
-        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#00FF55'; ctx.shadowBlur = 8;
         ctx.fillStyle = '#00FF55';
         ctx.fillRect(x, y, barW, barH);
         ctx.restore();
 
-        // Sharp core
         const grad = ctx.createLinearGradient(x, y, x, h);
         grad.addColorStop(0, '#00FF55');
         grad.addColorStop(0.5, '#00CC44');
@@ -320,67 +279,41 @@ function drawCRT(w, h) {
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, barW, barH);
 
-        // Bright cap
-        if (barH > 4) {
-            ctx.fillStyle = '#88FFAA';
-            ctx.fillRect(x, y, barW, 2);
-        }
-
-        // Peak
+        if (barH > 4) { ctx.fillStyle = '#88FFAA'; ctx.fillRect(x, y, barW, 2); }
         if (peakHeights[i] > 2) {
-            const peakY = h - peakHeights[i];
             ctx.fillStyle = '#AAFFCC';
-            ctx.shadowColor = '#00FF55';
-            ctx.shadowBlur = 6;
-            ctx.fillRect(x, peakY, barW, 2);
+            ctx.shadowColor = '#00FF55'; ctx.shadowBlur = 6;
+            ctx.fillRect(x, h - peakHeights[i], barW, 2);
             ctx.shadowBlur = 0;
         }
     }
-
-    // Moving scanline
     const scanY = (Date.now() / 15) % h;
     ctx.fillStyle = 'rgba(0, 255, 68, 0.04)';
     ctx.fillRect(0, scanY, w, 3);
-
     drawReflection(w, h);
 }
 
-/* -- Oscilloscope Mode ------------------------------------ */
 function drawScope(w, h) {
     const bufLen = 128;
-    ctx.lineWidth = 2;
-
-    // Center line (dim)
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-    ctx.beginPath();
-    ctx.moveTo(0, h / 2);
-    ctx.lineTo(w, h / 2);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
 
-    // Glow pass
     ctx.save();
     ctx.lineWidth = 5;
     ctx.strokeStyle = 'rgba(0, 180, 255, 0.15)';
-    ctx.shadowColor = '#0088FF';
-    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#0088FF'; ctx.shadowBlur = 20;
     ctx.globalCompositeOperation = 'lighter';
-    drawScopePath(w, h, bufLen);
-    ctx.restore();
+    drawScopePath(w, h, bufLen); ctx.restore();
 
-    // Mid pass
     ctx.save();
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
-    ctx.shadowColor = '#4488FF';
-    ctx.shadowBlur = 8;
-    drawScopePath(w, h, bufLen);
-    ctx.restore();
+    ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 8;
+    drawScopePath(w, h, bufLen); ctx.restore();
 
-    // Core line
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#4488FF';
-    ctx.shadowColor = '#4488FF';
-    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 4;
     drawScopePath(w, h, bufLen);
     ctx.shadowBlur = 0;
 }
@@ -390,31 +323,27 @@ function drawScopePath(w, h, bufLen) {
     const sliceW = w / bufLen;
     let x = 0;
     const t = Date.now();
+    const active = isPlaying || isBuffering;
     for (let i = 0; i < bufLen; i++) {
-        let v;
-        if (isPlaying) {
+        let v = 1;
+        if (active) {
             v = 1 +
                 Math.sin(t / 180 + i * 0.18) * 0.30 +
                 Math.sin(t / 450 + i * 0.09) * 0.18 +
                 Math.sin(t / 90 + i * 0.35) * 0.08 +
                 Math.cos(t / 300 + i * 0.25) * 0.06;
-        } else {
-            v = 1;
+            if (isBuffering) v = 1 + (v - 1) * 0.3;
         }
         const y = (v * h) / 2;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         x += sliceW;
     }
     ctx.stroke();
 }
 
-/* -- Reflection effect ------------------------------------ */
 function drawReflection(w, h) {
     const reflH = Math.floor(h * 0.12);
     if (reflH < 4) return;
-
-    // Copy bottom strip and flip
     try {
         const imgData = ctx.getImageData(0, h - reflH * 2, w, reflH);
         ctx.save();
@@ -423,11 +352,7 @@ function drawReflection(w, h) {
         ctx.globalAlpha = 0.12;
         ctx.putImageData(imgData, 0, 0);
         ctx.restore();
-    } catch (e) {
-        // Canvas tainted or too small - skip reflection
-    }
-
-    // Fade it out
+    } catch (e) { /* skip */ }
     const fade = ctx.createLinearGradient(0, h - reflH, 0, h);
     fade.addColorStop(0, 'rgba(8, 8, 15, 0.3)');
     fade.addColorStop(1, 'rgba(8, 8, 15, 1)');
@@ -472,14 +397,15 @@ function removeStation(id) {
 function renderStationList() {
     stationListEl.innerHTML = '';
     if (stations.length === 0) {
-        stationListEl.innerHTML = '<div class="station-list-empty">No stations yet.<br>Click "Add Station..." to get started.</div>';
+        stationListEl.innerHTML = '<div class="station-list-empty">No stations.<br>Click "Add Station..." to get started.</div>';
         return;
     }
     stations.forEach(station => {
         const el = document.createElement('div');
         el.className = 'station-item';
         if (station.id === selectedStationId) el.classList.add('selected');
-        if (station.id === playingStationId) el.classList.add('playing');
+        if (station.id === playingStationId && isPlaying) el.classList.add('playing');
+        if (station.id === playingStationId && isBuffering) el.classList.add('buffering');
 
         el.innerHTML = `
             <div class="station-item-indicator"></div>
@@ -490,11 +416,7 @@ function renderStationList() {
         `;
 
         // Single click = select AND play immediately
-        el.addEventListener('click', () => {
-            selectedStationId = station.id;
-            startPlayback(station.id);
-        });
-
+        el.addEventListener('click', () => startPlayback(station.id));
         stationListEl.appendChild(el);
     });
 }
@@ -503,21 +425,22 @@ function updateRemoveBtn() {
     document.getElementById('remove-station-btn').disabled = !selectedStationId;
 }
 
-function updateNowPlaying(station) {
+function updateNowPlaying(station, buffering) {
     if (station) {
         currentNameEl.textContent = station.name;
         currentLocEl.textContent = station.location || '\u00A0';
-        nowPlayingText.textContent = 'NOW PLAYING';
-        nowPlayingLabel.classList.add('active');
+        if (buffering) {
+            nowPlayingText.textContent = 'BUFFERING';
+            nowPlayingLabel.className = 'now-playing-label buffering';
+        } else {
+            nowPlayingText.textContent = 'NOW PLAYING';
+            nowPlayingLabel.className = 'now-playing-label active';
+        }
     } else {
-        currentNameEl.textContent = selectedStationId
-            ? (stations.find(s => s.id === selectedStationId)?.name || 'Click a station to play')
-            : 'Click a station to play';
-        currentLocEl.innerHTML = selectedStationId
-            ? (stations.find(s => s.id === selectedStationId)?.location || '&nbsp;')
-            : '&nbsp;';
+        currentNameEl.textContent = 'Click a station to play';
+        currentLocEl.innerHTML = '&nbsp;';
         nowPlayingText.textContent = 'NO SIGNAL';
-        nowPlayingLabel.classList.remove('active');
+        nowPlayingLabel.className = 'now-playing-label';
     }
 }
 
@@ -536,27 +459,39 @@ function startPlayback(id) {
     // If already playing this station, do nothing
     if (playingStationId === stationId && isPlaying) return;
 
-    // If playing a different station, stop first (smooth transition)
-    if (isPlaying) {
+    // Stop previous if any
+    if (isPlaying || isBuffering) {
         audio.pause();
     }
 
+    // IMMEDIATELY update UI to show selected + buffering
+    selectedStationId = stationId;
+    playingStationId = stationId;
+    isBuffering = true;
+    isPlaying = false;
+    stopBtn.disabled = false;
+    updateNowPlaying(station, true);
+    renderStationList();
+    updateStationsMenu();
+    updateRemoveBtn();
     setStatus('Connecting to ' + station.name + '...', true);
-    audio.src = station.streamUrl;
 
+    // Start audio
+    audio.src = station.streamUrl;
     audio.play()
         .then(() => {
             isPlaying = true;
-            playingStationId = stationId;
-            selectedStationId = stationId;
-            stopBtn.disabled = false;
-            updateNowPlaying(station);
+            isBuffering = false;
+            updateNowPlaying(station, false);
             renderStationList();
-            updateStationsMenu();
-            updateRemoveBtn();
             setStatus('Playing: ' + station.name, false);
         })
         .catch(err => {
+            isBuffering = false;
+            playingStationId = null;
+            updateNowPlaying(null);
+            renderStationList();
+            updateStationsMenu();
             setStatus('Error: Could not play ' + station.name, false);
             console.error('Playback error:', err);
         });
@@ -566,6 +501,7 @@ function stopPlayback() {
     audio.pause();
     audio.src = '';
     isPlaying = false;
+    isBuffering = false;
     playingStationId = null;
     stopBtn.disabled = true;
     updateNowPlaying(null);
@@ -584,39 +520,121 @@ volumeSlider.addEventListener('input', () => {
 /* -- Transport Controls ----------------------------------- */
 stopBtn.addEventListener('click', () => stopPlayback());
 
-/* -- Add/Remove Station ----------------------------------- */
+/* -- Radio Garden URL Resolution -------------------------- */
+function extractChannelId(url) {
+    const match = url.match(RADIO_GARDEN_REGEX);
+    return match ? match[1] : null;
+}
+
+async function fetchViaProxy(url) {
+    for (const proxyFn of CORS_PROXIES) {
+        try {
+            const proxyUrl = proxyFn(url);
+            const res = await fetch(proxyUrl, {
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+            });
+            if (res.ok) return res;
+        } catch (e) { continue; }
+    }
+    throw new Error('Could not reach radio.garden');
+}
+
+async function resolveRadioGardenUrl(channelId) {
+    const apiUrl = 'https://radio.garden/api/ara/content/channel/' + channelId;
+    const res = await fetchViaProxy(apiUrl);
+    const json = await res.json();
+    const data = json.data;
+    if (!data || !data.title) throw new Error('Invalid station data');
+
+    const name = data.title;
+    const city = data.place ? data.place.title : '';
+    const country = data.country ? data.country.title : '';
+    const location = city && country ? city + ', ' + country : city || country || '';
+    const streamUrl = 'https://radio.garden/api/ara/content/listen/' + channelId + '/channel.mp3';
+
+    return { name, location, streamUrl };
+}
+
+/* -- Add Station Dialog ----------------------------------- */
+let resolveDebounce = null;
+
+function showAddDialog() {
+    document.getElementById('input-url').value = '';
+    document.getElementById('resolve-preview').style.display = 'none';
+    document.getElementById('manual-name-row').style.display = 'none';
+    document.getElementById('dialog-save-btn').disabled = true;
+    resolvedStation = null;
+    document.getElementById('add-dialog-overlay').classList.add('visible');
+    document.getElementById('input-url').focus();
+}
+
+function hideAddDialog() {
+    document.getElementById('add-dialog-overlay').classList.remove('visible');
+    resolvedStation = null;
+}
+
+document.getElementById('input-url').addEventListener('input', (e) => {
+    clearTimeout(resolveDebounce);
+    const url = e.target.value.trim();
+    resolvedStation = null;
+    document.getElementById('dialog-save-btn').disabled = true;
+
+    if (!url) {
+        document.getElementById('resolve-preview').style.display = 'none';
+        document.getElementById('manual-name-row').style.display = 'none';
+        return;
+    }
+
+    const channelId = extractChannelId(url);
+    if (channelId) {
+        // Radio.garden URL -- auto-resolve
+        document.getElementById('resolve-preview').style.display = 'block';
+        document.getElementById('resolve-loading').style.display = 'flex';
+        document.getElementById('resolve-result').style.display = 'none';
+        document.getElementById('resolve-error').style.display = 'none';
+        document.getElementById('manual-name-row').style.display = 'none';
+
+        resolveDebounce = setTimeout(async () => {
+            try {
+                const info = await resolveRadioGardenUrl(channelId);
+                resolvedStation = info;
+                document.getElementById('resolve-loading').style.display = 'none';
+                document.getElementById('resolve-result').style.display = 'block';
+                document.getElementById('resolve-name').textContent = info.name;
+                document.getElementById('resolve-location').textContent = info.location;
+                document.getElementById('dialog-save-btn').disabled = false;
+            } catch (err) {
+                document.getElementById('resolve-loading').style.display = 'none';
+                document.getElementById('resolve-error').style.display = 'block';
+                document.getElementById('resolve-error').textContent = 'Could not resolve station. Try pasting a direct stream URL instead.';
+            }
+        }, 300);
+    } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        // Direct stream URL
+        document.getElementById('resolve-preview').style.display = 'none';
+        document.getElementById('manual-name-row').style.display = 'block';
+        resolvedStation = { name: '', location: '', streamUrl: url };
+        document.getElementById('dialog-save-btn').disabled = false;
+    }
+});
+
 document.getElementById('add-station-btn').addEventListener('click', showAddDialog);
 document.getElementById('remove-station-btn').addEventListener('click', () => {
     if (selectedStationId) removeStation(selectedStationId);
 });
 
-/* -- Dialogs ---------------------------------------------- */
-function showAddDialog() {
-    document.getElementById('input-name').value = '';
-    document.getElementById('input-url').value = '';
-    document.getElementById('input-location').value = '';
-    document.getElementById('add-dialog-overlay').classList.add('visible');
-    document.getElementById('input-name').focus();
-}
-
-function hideAddDialog() {
-    document.getElementById('add-dialog-overlay').classList.remove('visible');
-}
-
 document.getElementById('dialog-cancel-btn').addEventListener('click', hideAddDialog);
 document.getElementById('dialog-save-btn').addEventListener('click', () => {
-    const name = document.getElementById('input-name').value.trim();
-    const url = document.getElementById('input-url').value.trim();
-    const loc = document.getElementById('input-location').value.trim();
-    if (!name || !url) {
-        setStatus('Please enter a name and stream URL', false);
-        return;
-    }
-    addStation(name, url, loc);
+    if (!resolvedStation) return;
+    const name = resolvedStation.name ||
+                 document.getElementById('input-name').value.trim() ||
+                 'Custom Station';
+    addStation(name, resolvedStation.streamUrl, resolvedStation.location);
     hideAddDialog();
     setStatus('Station added: ' + name, false);
 });
 
+/* -- About / Help / Welcome Dialogs ----------------------- */
 function showAbout() {
     document.getElementById('about-dialog-overlay').classList.add('visible');
 }
@@ -631,18 +649,15 @@ document.getElementById('help-ok-btn').addEventListener('click', () => {
     document.getElementById('help-dialog-overlay').classList.remove('visible');
 });
 
-// Help topic navigation
 document.querySelectorAll('.help-topic').forEach(topic => {
     topic.addEventListener('click', () => {
         document.querySelectorAll('.help-topic').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.help-page').forEach(p => p.style.display = 'none');
         topic.classList.add('active');
-        const pageId = 'help-' + topic.dataset.topic;
-        document.getElementById(pageId).style.display = 'block';
+        document.getElementById('help-' + topic.dataset.topic).style.display = 'block';
     });
 });
 
-// Close dialog overlays on click outside or Escape
 const overlayIds = ['add-dialog-overlay', 'about-dialog-overlay', 'help-dialog-overlay', 'welcome-dialog-overlay'];
 overlayIds.forEach(id => {
     document.getElementById(id).addEventListener('click', (e) => {
@@ -650,7 +665,6 @@ overlayIds.forEach(id => {
     });
 });
 
-/* -- Welcome Dialog --------------------------------------- */
 function showWelcome() {
     if (localStorage.getItem(ONBOARDED_KEY)) return;
     document.getElementById('welcome-dialog-overlay').classList.add('visible');
@@ -666,11 +680,9 @@ document.getElementById('welcome-ok-btn').addEventListener('click', () => {
 /* -- Balloon Help ----------------------------------------- */
 function toggleBalloonHelp() {
     balloonHelpEnabled = !balloonHelpEnabled;
-    const toggle = document.getElementById('balloon-toggle');
-    toggle.textContent = balloonHelpEnabled ? 'Hide Balloon Help' : 'Show Balloon Help';
-    if (!balloonHelpEnabled) {
-        document.getElementById('balloon').style.display = 'none';
-    }
+    document.getElementById('balloon-toggle').textContent =
+        balloonHelpEnabled ? 'Hide Balloon Help' : 'Show Balloon Help';
+    if (!balloonHelpEnabled) document.getElementById('balloon').style.display = 'none';
 }
 
 document.addEventListener('mouseover', (e) => {
@@ -678,8 +690,7 @@ document.addEventListener('mouseover', (e) => {
     const target = e.target.closest('[data-balloon]');
     const balloon = document.getElementById('balloon');
     if (target) {
-        const text = target.dataset.balloon;
-        document.getElementById('balloon-content').textContent = text;
+        document.getElementById('balloon-content').textContent = target.dataset.balloon;
         const rect = target.getBoundingClientRect();
         balloon.style.left = rect.left + 'px';
         balloon.style.top = (rect.bottom + 4) + 'px';
@@ -694,7 +705,7 @@ let openMenuId = null;
 
 function openMenu(menuId) {
     closeAllMenus();
-    const item = document.querySelector(`.menu-item[data-menu="${menuId}"]`);
+    const item = document.querySelector('.menu-item[data-menu="' + menuId + '"]');
     if (item) {
         item.classList.add('open');
         openMenuId = menuId;
@@ -706,13 +717,28 @@ function closeAllMenus() {
     openMenuId = null;
 }
 
+// Menu open/close: use BOTH mousedown and click for maximum browser compat
 document.querySelectorAll('.menu-item[data-menu]').forEach(item => {
+    let handledByMousedown = false;
+
     item.addEventListener('mousedown', (e) => {
         e.stopPropagation();
+        e.preventDefault();
+        handledByMousedown = true;
         const menuId = item.dataset.menu;
         if (openMenuId === menuId) closeAllMenus();
         else openMenu(menuId);
     });
+
+    item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Only handle if mousedown didn't fire (touch devices, etc.)
+        if (handledByMousedown) { handledByMousedown = false; return; }
+        const menuId = item.dataset.menu;
+        if (openMenuId === menuId) closeAllMenus();
+        else openMenu(menuId);
+    });
+
     item.addEventListener('mouseenter', () => {
         if (openMenuId && item.dataset.menu !== openMenuId) {
             openMenu(item.dataset.menu);
@@ -720,17 +746,21 @@ document.querySelectorAll('.menu-item[data-menu]').forEach(item => {
     });
 });
 
+// Close menus when clicking outside
 document.addEventListener('mousedown', (e) => {
-    if (!e.target.closest('.menu-bar')) closeAllMenus();
+    if (openMenuId && !e.target.closest('.menu-bar')) closeAllMenus();
+});
+document.addEventListener('click', (e) => {
+    if (openMenuId && !e.target.closest('.menu-bar')) closeAllMenus();
 });
 
-// Menu actions
+// Menu dropdown item actions
 document.addEventListener('click', (e) => {
-    const menuItem = e.target.closest('.menu-dropdown-item');
-    if (!menuItem || menuItem.classList.contains('disabled')) return;
+    const dropdownItem = e.target.closest('.menu-dropdown-item');
+    if (!dropdownItem || dropdownItem.classList.contains('disabled')) return;
 
-    const action = menuItem.dataset.action;
-    const stationId = menuItem.dataset.stationId;
+    const action = dropdownItem.dataset.action;
+    const stationId = dropdownItem.dataset.stationId;
 
     if (action === 'about') showAbout();
     else if (action === 'help') showHelp();
@@ -739,7 +769,10 @@ document.addEventListener('click', (e) => {
     else if (action === 'quit') quitApp();
     else if (action === 'show-window') showWindow();
     else if (action === 'toggle-balloons') toggleBalloonHelp();
-    else if (action && action.startsWith('viz-')) setVizMode(action.replace('viz-', ''));
+    else if (action === 'viz-rainbow') setVizMode('rainbow');
+    else if (action === 'viz-vu') setVizMode('vu');
+    else if (action === 'viz-crt') setVizMode('crt');
+    else if (action === 'viz-scope') setVizMode('scope');
     else if (stationId) startPlayback(stationId);
 
     closeAllMenus();
@@ -771,17 +804,15 @@ function setVizMode(mode) {
     vizMode = mode;
     localStorage.setItem(VIZ_KEY, mode);
     vizLabel.textContent = VIZ_LABELS[mode] || mode.toUpperCase();
-    // Update menu checks
     ['rainbow', 'vu', 'crt', 'scope'].forEach(m => {
         const el = document.getElementById('check-' + m);
         if (el) el.textContent = m === mode ? '\u2713' : '';
     });
-    heatGradient = null; // Force rebuild
+    heatGradient = null;
 }
 
 /* -- Window Management ------------------------------------ */
 function closeWindow() {
-    // Don't stop playback -- music keeps playing
     document.getElementById('main-window').style.display = 'none';
     document.getElementById('desktop-icon').style.display = 'flex';
     document.getElementById('check-window').textContent = '';
@@ -797,15 +828,12 @@ function showWindow() {
 function quitApp() {
     stopPlayback();
     closeWindow();
-    setStatus('Quit. Reload page to restart.', false);
+    setStatus('Quit. Reload to restart.', false);
 }
 
-// Desktop icon: double-click to open, single-click to select
 const desktopIcon = document.getElementById('desktop-icon');
 desktopIcon.addEventListener('dblclick', showWindow);
-desktopIcon.addEventListener('click', () => {
-    desktopIcon.classList.toggle('selected');
-});
+desktopIcon.addEventListener('click', () => desktopIcon.classList.toggle('selected'));
 
 /* -- Menu Clock ------------------------------------------- */
 function updateClock() {
@@ -813,8 +841,7 @@ function updateClock() {
     const h = now.getHours();
     const m = String(now.getMinutes()).padStart(2, '0');
     const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    document.getElementById('menu-clock').textContent = h12 + ':' + m + ' ' + ampm;
+    document.getElementById('menu-clock').textContent = (h % 12 || 12) + ':' + m + ' ' + ampm;
 }
 setInterval(updateClock, 10000);
 updateClock();
@@ -823,8 +850,7 @@ updateClock();
 (function setupDrag() {
     const titlebar = document.getElementById('main-titlebar');
     const win = document.getElementById('main-window');
-    let dragging = false;
-    let offsetX = 0, offsetY = 0;
+    let dragging = false, offsetX = 0, offsetY = 0;
 
     titlebar.addEventListener('mousedown', (e) => {
         if (e.target.closest('.titlebar-btn')) return;
@@ -834,19 +860,16 @@ updateClock();
         titlebar.classList.add('dragging');
         e.preventDefault();
     });
-
     document.addEventListener('mousemove', (e) => {
         if (!dragging) return;
         let x = e.clientX - offsetX;
         let y = e.clientY - offsetY;
-        const menuH = 24;
-        y = Math.max(menuH, Math.min(y, window.innerHeight - 30));
+        y = Math.max(24, Math.min(y, window.innerHeight - 30));
         x = Math.max(-win.offsetWidth + 60, Math.min(x, window.innerWidth - 60));
         win.style.left = x + 'px';
         win.style.top = y + 'px';
         win.style.transform = 'none';
     });
-
     document.addEventListener('mouseup', () => {
         dragging = false;
         titlebar.classList.remove('dragging');
@@ -855,28 +878,21 @@ updateClock();
 
 /* -- Window Controls -------------------------------------- */
 document.getElementById('close-btn').addEventListener('click', closeWindow);
-
 document.getElementById('shade-btn').addEventListener('click', () => {
     document.getElementById('main-window').classList.toggle('shaded');
 });
-
 document.getElementById('zoom-btn').addEventListener('click', () => {
     const win = document.getElementById('main-window');
     const desktop = document.getElementById('desktop');
     if (win.classList.contains('zoomed')) {
         win.classList.remove('zoomed');
-        win.style.width = '820px';
-        win.style.height = '560px';
-        win.style.left = '';
-        win.style.top = '';
-        win.style.transform = '';
+        win.style.width = '820px'; win.style.height = '560px';
+        win.style.left = ''; win.style.top = ''; win.style.transform = '';
     } else {
         win.classList.add('zoomed');
         win.style.width = (desktop.clientWidth - 8) + 'px';
         win.style.height = (desktop.clientHeight - 8) + 'px';
-        win.style.left = '4px';
-        win.style.top = '28px';
-        win.style.transform = 'none';
+        win.style.left = '4px'; win.style.top = '28px'; win.style.transform = 'none';
     }
     setTimeout(resizeCanvas, 50);
 });
@@ -884,15 +900,13 @@ document.getElementById('zoom-btn').addEventListener('click', () => {
 /* -- Keyboard Shortcuts ----------------------------------- */
 document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') {
-        if (e.key === 'Escape') {
-            overlayIds.forEach(id => document.getElementById(id).classList.remove('visible'));
-        }
+        if (e.key === 'Escape') overlayIds.forEach(id => document.getElementById(id).classList.remove('visible'));
         if (e.key === 'Enter' && document.getElementById('add-dialog-overlay').classList.contains('visible')) {
-            document.getElementById('dialog-save-btn').click();
+            const btn = document.getElementById('dialog-save-btn');
+            if (!btn.disabled) btn.click();
         }
         return;
     }
-
     const cmd = e.metaKey || e.ctrlKey;
     if (cmd && e.key === 'n') { e.preventDefault(); showAddDialog(); }
     else if (cmd && e.key === 'w') { e.preventDefault(); closeWindow(); }
@@ -900,14 +914,14 @@ document.addEventListener('keydown', (e) => {
     else if (cmd && e.key === '1') { e.preventDefault(); showWindow(); }
     else if (e.key === ' ') {
         e.preventDefault();
-        if (isPlaying) stopPlayback();
+        if (isPlaying || isBuffering) stopPlayback();
         else if (selectedStationId) startPlayback(selectedStationId);
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         navigateStations(e.key === 'ArrowDown' ? 1 : -1);
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' && selectedStationId) {
         e.preventDefault();
-        if (selectedStationId) startPlayback(selectedStationId);
+        startPlayback(selectedStationId);
     } else if (e.key === 'Escape') {
         overlayIds.forEach(id => document.getElementById(id).classList.remove('visible'));
     }
@@ -915,36 +929,54 @@ document.addEventListener('keydown', (e) => {
 
 function navigateStations(direction) {
     if (stations.length === 0) return;
-    const currentIdx = stations.findIndex(s => s.id === selectedStationId);
-    let newIdx;
-    if (currentIdx === -1) {
-        newIdx = direction > 0 ? 0 : stations.length - 1;
-    } else {
-        newIdx = (currentIdx + direction + stations.length) % stations.length;
-    }
+    const idx = stations.findIndex(s => s.id === selectedStationId);
+    let newIdx = idx === -1
+        ? (direction > 0 ? 0 : stations.length - 1)
+        : (idx + direction + stations.length) % stations.length;
     selectedStationId = stations[newIdx].id;
     renderStationList();
     updateRemoveBtn();
-    const station = stations[newIdx];
-    if (!isPlaying) {
-        currentNameEl.textContent = station.name;
-        currentLocEl.textContent = station.location || '\u00A0';
+    if (!isPlaying && !isBuffering) {
+        currentNameEl.textContent = stations[newIdx].name;
+        currentLocEl.textContent = stations[newIdx].location || '\u00A0';
     }
 }
 
 /* -- Audio Events ----------------------------------------- */
-audio.addEventListener('waiting', () => setStatus('Buffering...', true));
+audio.addEventListener('waiting', () => {
+    if (playingStationId) {
+        isBuffering = true;
+        isPlaying = false;
+        const station = stations.find(s => s.id === playingStationId);
+        if (station) updateNowPlaying(station, true);
+        renderStationList();
+        setStatus('Buffering...', true);
+    }
+});
 audio.addEventListener('playing', () => {
+    isBuffering = false;
+    isPlaying = true;
     const station = stations.find(s => s.id === playingStationId);
-    if (station) setStatus('Playing: ' + station.name, false);
+    if (station) {
+        updateNowPlaying(station, false);
+        renderStationList();
+        setStatus('Playing: ' + station.name, false);
+    }
 });
 audio.addEventListener('error', () => {
     if (playingStationId) {
-        setStatus('Connection lost. Try again.', false);
-        stopPlayback();
+        setStatus('Connection lost. Click to retry.', false);
+        isBuffering = false;
+        isPlaying = false;
+        playingStationId = null;
+        updateNowPlaying(null);
+        renderStationList();
+        updateStationsMenu();
     }
 });
-audio.addEventListener('stalled', () => setStatus('Stream stalled...', true));
+audio.addEventListener('stalled', () => {
+    if (playingStationId) setStatus('Stream stalled...', true);
+});
 
 /* -- Utility ---------------------------------------------- */
 function escapeHtml(str) {
@@ -956,10 +988,8 @@ function escapeHtml(str) {
 function centerWindow() {
     const win = document.getElementById('main-window');
     const desktop = document.getElementById('desktop');
-    const x = (desktop.clientWidth - win.offsetWidth) / 2;
-    const y = (desktop.clientHeight - win.offsetHeight) / 2;
-    win.style.left = x + 'px';
-    win.style.top = y + 'px';
+    win.style.left = ((desktop.clientWidth - win.offsetWidth) / 2) + 'px';
+    win.style.top = ((desktop.clientHeight - win.offsetHeight) / 2) + 'px';
     win.style.transform = 'none';
 }
 
@@ -973,7 +1003,6 @@ function init() {
     setVizMode(vizMode);
     drawVisualizer();
     showWelcome();
-
     window.addEventListener('resize', resizeCanvas);
 }
 

@@ -183,22 +183,29 @@
                     <div class="dialog-icon">&#9834;</div>
                     <div class="dialog-form">
                         <div class="form-row">
-                            <label class="form-label" for="input-name">Name:</label>
+                            <label class="form-label" for="input-url">Paste a radio.garden link or stream URL:</label>
+                            <input type="text" id="input-url" class="mac-input"
+                                   placeholder="https://radio.garden/listen/station-name/abc123">
+                        </div>
+                        <div class="resolve-preview" id="resolve-preview" style="display:none">
+                            <div class="resolve-loading" id="resolve-loading">
+                                <span class="resolve-spinner"></span> Looking up station...
+                            </div>
+                            <div class="resolve-result" id="resolve-result" style="display:none">
+                                <div class="resolve-name" id="resolve-name"></div>
+                                <div class="resolve-location" id="resolve-location"></div>
+                            </div>
+                            <div class="resolve-error" id="resolve-error" style="display:none"></div>
+                        </div>
+                        <div class="form-row" id="manual-name-row" style="display:none">
+                            <label class="form-label" for="input-name">Station Name (optional):</label>
                             <input type="text" id="input-name" class="mac-input" placeholder="My Station">
-                        </div>
-                        <div class="form-row">
-                            <label class="form-label" for="input-url">Stream URL:</label>
-                            <input type="text" id="input-url" class="mac-input" placeholder="https://stream.example.com/live">
-                        </div>
-                        <div class="form-row">
-                            <label class="form-label" for="input-location">Location:</label>
-                            <input type="text" id="input-location" class="mac-input" placeholder="City, Country">
                         </div>
                     </div>
                 </div>
                 <div class="dialog-buttons">
                     <button class="mac-btn" id="dialog-cancel-btn">Cancel</button>
-                    <button class="mac-btn default-btn" id="dialog-save-btn">Add Station</button>
+                    <button class="mac-btn default-btn" id="dialog-save-btn" disabled>Add Station</button>
                 </div>
             </div>
         </div>

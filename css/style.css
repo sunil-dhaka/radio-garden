@@ -383,6 +383,15 @@ html, body {
     animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
+.station-item.buffering .station-item-indicator {
+    width: 10px; height: 10px;
+    border: 2px solid var(--platinum-darker);
+    border-top-color: var(--highlight);
+    background: transparent;
+    box-shadow: none;
+    animation: spin 0.8s linear infinite;
+}
+
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 .station-item-info { flex: 1; min-width: 0; }
@@ -830,4 +839,60 @@ html, body {
     #main-window {
         height: calc(100vh - var(--menubar-h) - 10px);
     }
+}
+
+/* -- Resolve Preview -------------------------------------- */
+.resolve-preview {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--platinum-lighter);
+    border: 1px solid var(--platinum-dark);
+    font-size: 11px;
+}
+
+.resolve-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--platinum-darkest);
+}
+
+.resolve-spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--platinum-darker);
+    border-top-color: var(--highlight);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.resolve-result { color: var(--black); }
+
+.resolve-name {
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 2px;
+}
+
+.resolve-location {
+    font-size: 11px;
+    color: var(--platinum-darkest);
+}
+
+.resolve-error {
+    color: var(--error-red);
+}
+
+/* -- Buffering label in now-playing ----------------------- */
+.now-playing-label.buffering {
+    color: #CC8800;
+}
+
+.now-playing-label.buffering .blink-dot {
+    width: 8px; height: 8px;
+    border: 2px solid var(--platinum-darker);
+    border-top-color: #CC8800;
+    background: transparent;
+    box-shadow: none;
+    animation: spin 0.8s linear infinite;
 }
