@@ -209,6 +209,10 @@ html, body {
     position: absolute;
     min-width: 500px;
     min-height: 350px;
+    /* CSS centering fallback before JS runs */
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
 }
 
 #main-window.shaded {
