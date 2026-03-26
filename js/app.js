@@ -67,7 +67,11 @@ let peakHeights = new Array(BAR_COUNT).fill(0);
 let peakVelocity = new Array(BAR_COUNT).fill(0);
 let peakHold = new Array(BAR_COUNT).fill(0);
 let animFrameId = null;
-let heatGradient = null;
+
+// Pre-computed color tables (rebuilt on viz mode change or resize)
+let rainbowColors = null;
+let radialColors = null;
+const RADIAL_COUNT = BAR_COUNT * 2;
 
 const VIZ_LABELS = {
     rainbow: 'RAINBOW SPECTRUM',
@@ -80,30 +84,94 @@ function resizeCanvas() {
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
-    heatGradient = null;
+    rainbowColors = null; // Force rebuild
+    radialColors = null;
 }
+
+function buildRainbowColors() {
+    rainbowColors = [];
+    for (let i = 0; i < BAR_COUNT; i++) {
+        const hue = (i / BAR_COUNT) * 280;
+        rainbowColors.push({
+            glow: 'hsl(' + hue + ',100%,50%)',
+            cap: 'hsl(' + hue + ',100%,80%)',
+            peak: 'hsl(' + hue + ',100%,90%)',
+            gradStops: [
+                'hsl(' + hue + ',100%,65%)',
+                'hsl(' + hue + ',95%,50%)',
+                'hsl(' + hue + ',80%,25%)',
+            ],
+        });
+    }
+}
+
+function buildRadialColors() {
+    radialColors = [];
+    for (let i = 0; i < RADIAL_COUNT; i++) {
+        const hue = (i / RADIAL_COUNT) * 360;
+        radialColors.push({
+            glow: 'hsl(' + hue + ',100%,50%)',
+            core: 'hsl(' + hue + ',100%,65%)',
+            tip: 'hsl(' + hue + ',100%,85%)',
+            peak: 'hsl(' + hue + ',100%,95%)',
+        });
+    }
+}
+
+// Reusable element for escapeHtml
+const _escDiv = document.createElement('div');
 
 /* -- Visualizer Drawing ----------------------------------- */
 let lastFrameTime = 0;
-const TARGET_FPS = 30;
-const FRAME_INTERVAL = 1000 / TARGET_FPS;
-const IDLE_FPS = 2;
-const IDLE_INTERVAL = 1000 / IDLE_FPS;
+const FRAME_INTERVAL = 1000 / 30; // 30fps
+let idleDrawn = false;
+
+function startVisualizer() {
+    if (animFrameId) return;
+    idleDrawn = false;
+    animFrameId = requestAnimationFrame(drawVisualizer);
+}
+
+function stopVisualizer() {
+    // Draw one final idle frame, then stop
+    if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+    }
+    drawIdleFrame();
+}
+
+function drawIdleFrame() {
+    const w = canvas.width, h = canvas.height;
+    if (w === 0 || h === 0) return;
+    ctx.fillStyle = '#08080f';
+    ctx.fillRect(0, 0, w, h);
+    // Dim grid
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let gy = 0; gy < h; gy += 24) { ctx.moveTo(0, gy); ctx.lineTo(w, gy); }
+    for (let gx = 0; gx < w; gx += 24) { ctx.moveTo(gx, 0); ctx.lineTo(gx, h); }
+    ctx.stroke();
+    idleDrawn = true;
+}
 
 function drawVisualizer(timestamp) {
     animFrameId = requestAnimationFrame(drawVisualizer);
 
-    // Throttle: 30fps when active, 2fps when idle
-    const active = isPlaying || isBuffering;
-    const interval = active ? FRAME_INTERVAL : IDLE_INTERVAL;
-    if (timestamp - lastFrameTime < interval) return;
+    // Throttle to 30fps
+    if (timestamp - lastFrameTime < FRAME_INTERVAL) return;
     lastFrameTime = timestamp;
+
+    // If idle and we already drew the static frame, skip entirely
+    const active = isPlaying || isBuffering;
+    if (!active && idleDrawn) return;
+    if (!active) { drawIdleFrame(); return; }
 
     const w = canvas.width;
     const h = canvas.height;
     if (w === 0 || h === 0) return;
 
-    // Clear canvas (no persistence = less GPU work)
     ctx.fillStyle = '#08080f';
     ctx.fillRect(0, 0, w, h);
 
@@ -123,6 +191,7 @@ function drawVisualizer(timestamp) {
         case 'aurora':  drawAurora(w, h);  break;
         case 'scope':   drawScope(w, h);   break;
     }
+    idleDrawn = false;
 }
 
 function updateBarData(h) {
@@ -177,37 +246,41 @@ function barLayout(w) {
 }
 
 function drawRainbow(w, h) {
+    if (!rainbowColors) buildRainbowColors();
     const { barW, gap } = barLayout(w);
+
+    // Glow pass (all bars, single alpha change)
+    ctx.globalAlpha = 0.15;
+    for (let i = 0; i < BAR_COUNT; i++) {
+        const barH = displayHeights[i];
+        if (barH < 1) continue;
+        const x = i * (barW + gap) + gap / 2;
+        ctx.fillStyle = rainbowColors[i].glow;
+        ctx.fillRect(x - 2, h - barH - 2, barW + 4, barH + 4);
+    }
+    ctx.globalAlpha = 1;
+
+    // Core bars
     for (let i = 0; i < BAR_COUNT; i++) {
         const barH = displayHeights[i];
         if (barH < 1) continue;
         const x = i * (barW + gap) + gap / 2;
         const y = h - barH;
-        const hue = (i / BAR_COUNT) * 280;
+        const c = rainbowColors[i];
 
-        // Soft glow behind bar (wider, dimmer, no shadowBlur)
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-        ctx.fillRect(x - 2, y - 2, barW + 4, barH + 4);
-        ctx.globalAlpha = 1;
-
-        // Solid bar with gradient
-        const grad = ctx.createLinearGradient(x, y, x, h);
-        grad.addColorStop(0, `hsl(${hue}, 100%, 65%)`);
-        grad.addColorStop(0.4, `hsl(${hue}, 95%, 50%)`);
-        grad.addColorStop(1, `hsl(${hue}, 80%, 25%)`);
+        const grad = ctx.createLinearGradient(0, y, 0, h);
+        grad.addColorStop(0, c.gradStops[0]);
+        grad.addColorStop(0.4, c.gradStops[1]);
+        grad.addColorStop(1, c.gradStops[2]);
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, barW, barH);
 
-        // Bright cap
         if (barH > 4) {
-            ctx.fillStyle = `hsl(${hue}, 100%, 80%)`;
+            ctx.fillStyle = c.cap;
             ctx.fillRect(x, y, barW, 2);
         }
-
-        // Peak indicator
         if (peakHeights[i] > 2) {
-            ctx.fillStyle = `hsl(${hue}, 100%, 90%)`;
+            ctx.fillStyle = c.peak;
             ctx.fillRect(x, h - peakHeights[i], barW, 2);
         }
     }
@@ -215,104 +288,130 @@ function drawRainbow(w, h) {
 
 /* -- Radial Burst Mode ------------------------------------ */
 function drawRadial(w, h) {
+    if (!radialColors) buildRadialColors();
     const cx = w / 2;
     const cy = h / 2;
     const maxR = Math.min(cx, cy) * 0.88;
     const innerR = maxR * 0.12;
-    const barCount = BAR_COUNT * 2; // More bars for full circle
+    const scale = (maxR - innerR) / (h * 0.82);
 
-    // Rotating inner ring
-    const t = Date.now();
-    const ringPulse = isPlaying || isBuffering ? 0.6 + Math.sin(t / 400) * 0.15 : 0.3;
-    ctx.save();
-    ctx.globalAlpha = ringPulse * 0.15;
+    // Inner ring
+    ctx.globalAlpha = 0.08;
     ctx.strokeStyle = '#FFFFFF';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.restore();
+    ctx.globalAlpha = 1;
 
-    for (let i = 0; i < barCount; i++) {
+    // Pre-compute angles
+    const PI2 = Math.PI * 2;
+    const halfPI = Math.PI / 2;
+
+    // Glow pass (all bars, one alpha state)
+    ctx.globalAlpha = 0.2;
+    ctx.lineWidth = 5;
+    for (let i = 0; i < RADIAL_COUNT; i++) {
         const dataIdx = i % BAR_COUNT;
         const barH = displayHeights[dataIdx];
         if (barH < 1) continue;
-
-        const angle = (i / barCount) * Math.PI * 2 - Math.PI / 2;
-        const barLen = (barH / (h * 0.82)) * (maxR - innerR);
-        const hue = (i / barCount) * 360;
-
+        const angle = (i / RADIAL_COUNT) * PI2 - halfPI;
+        const barLen = barH * scale;
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
-        const x1 = cx + cos * innerR;
-        const y1 = cy + sin * innerR;
-        const x2 = cx + cos * (innerR + barLen);
-        const y2 = cy + sin * (innerR + barLen);
-
-        // Soft glow (wider line, dimmer)
-        ctx.globalAlpha = 0.2;
-        ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
-        ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-        ctx.globalAlpha = 1;
-
-        // Core bar
-        ctx.strokeStyle = `hsl(${hue}, 100%, 65%)`;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-
-        // Bright tip
-        ctx.fillStyle = `hsl(${hue}, 100%, 85%)`;
+        ctx.strokeStyle = radialColors[i].glow;
         ctx.beginPath();
-        ctx.arc(x2, y2, 1.5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(cx + cos * innerR, cy + sin * innerR);
+        ctx.lineTo(cx + cos * (innerR + barLen), cy + sin * (innerR + barLen));
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
 
-        // Peak dot
+    // Core pass
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < RADIAL_COUNT; i++) {
+        const dataIdx = i % BAR_COUNT;
+        const barH = displayHeights[dataIdx];
+        if (barH < 1) continue;
+        const angle = (i / RADIAL_COUNT) * PI2 - halfPI;
+        const barLen = barH * scale;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const ex = cx + cos * (innerR + barLen);
+        const ey = cy + sin * (innerR + barLen);
+
+        ctx.strokeStyle = radialColors[i].core;
+        ctx.beginPath();
+        ctx.moveTo(cx + cos * innerR, cy + sin * innerR);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+
+        // Tip dot
+        ctx.fillStyle = radialColors[i].tip;
+        ctx.fillRect(ex - 1, ey - 1, 3, 3);
+
+        // Peak
         if (peakHeights[dataIdx] > 2) {
-            const peakLen = (peakHeights[dataIdx] / (h * 0.82)) * (maxR - innerR);
-            const px = cx + cos * (innerR + peakLen);
-            const py = cy + sin * (innerR + peakLen);
-            ctx.fillStyle = `hsl(${hue}, 100%, 95%)`;
-            ctx.beginPath();
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
-            ctx.fill();
+            const peakLen = peakHeights[dataIdx] * scale;
+            ctx.fillStyle = radialColors[i].peak;
+            ctx.fillRect(
+                cx + cos * (innerR + peakLen) - 1,
+                cy + sin * (innerR + peakLen) - 1, 3, 3
+            );
         }
     }
 }
 
 /* -- Aurora Waves Mode ------------------------------------ */
-function drawAurora(w, h) {
-    const waves = [
-        { color: '#FF00AA', glow: '#FF0088', speed: 280, freq: 0.012, amp: 0.14 },
-        { color: '#00FFCC', glow: '#00CCAA', speed: 350, freq: 0.009, amp: 0.16 },
-        { color: '#FFAA00', glow: '#CC8800', speed: 420, freq: 0.015, amp: 0.12 },
-        { color: '#44FF00', glow: '#33CC00', speed: 300, freq: 0.011, amp: 0.15 },
-        { color: '#8855FF', glow: '#6633DD', speed: 500, freq: 0.008, amp: 0.18 },
-        { color: '#FF4466', glow: '#CC3355', speed: 260, freq: 0.013, amp: 0.13 },
-    ];
+const AURORA_WAVES = [
+    { color: '#FF00AA', glow: '#FF0088', speed: 280, freq: 0.012, amp: 0.14 },
+    { color: '#00FFCC', glow: '#00CCAA', speed: 350, freq: 0.009, amp: 0.16 },
+    { color: '#FFAA00', glow: '#CC8800', speed: 420, freq: 0.015, amp: 0.12 },
+    { color: '#44FF00', glow: '#33CC00', speed: 300, freq: 0.011, amp: 0.15 },
+    { color: '#8855FF', glow: '#6633DD', speed: 500, freq: 0.008, amp: 0.18 },
+    { color: '#FF4466', glow: '#CC3355', speed: 260, freq: 0.013, amp: 0.13 },
+];
 
+function drawAurora(w, h) {
     const t = Date.now();
     const active = isPlaying || isBuffering;
     const intensity = active ? (isBuffering ? 0.4 : 1.0) : 0.05;
+    const step = 4; // pixels per sample (was 3)
+    const numPts = Math.ceil(w / step) + 1;
 
-    for (let wi = 0; wi < waves.length; wi++) {
-        const wave = waves[wi];
-        const baseY = (h / (waves.length + 1)) * (wi + 1);
+    for (let wi = 0; wi < AURORA_WAVES.length; wi++) {
+        const wave = AURORA_WAVES[wi];
+        const baseY = (h / (AURORA_WAVES.length + 1)) * (wi + 1);
+        const ampScale = wave.amp * baseY * intensity;
 
-        // Wide glow pass (thicker, dimmer line instead of shadowBlur)
+        // Compute Y values once, reuse for all 3 passes
+        const ys = new Float32Array(numPts);
+        for (let j = 0; j < numPts; j++) {
+            const px = j * step;
+            ys[j] = baseY +
+                Math.sin(t / wave.speed + px * wave.freq) * ampScale +
+                Math.sin(t / (wave.speed * 1.7) + px * wave.freq * 2.3 + wi) * (ampScale * 0.5) +
+                Math.cos(t / (wave.speed * 0.6) + px * wave.freq * 0.4) * (ampScale * 0.3);
+        }
+
+        // Glow pass
         ctx.lineWidth = 6;
         ctx.strokeStyle = wave.glow;
         ctx.globalAlpha = 0.15 * intensity;
-        drawAuroraPath(w, h, baseY, wi, wave, t, intensity);
+        ctx.beginPath();
+        for (let j = 0; j < numPts; j++) {
+            if (j === 0) ctx.moveTo(0, ys[0]);
+            else ctx.lineTo(j * step, ys[j]);
+        }
+        ctx.stroke();
 
-        // Fill below the wave (aurora glow)
+        // Fill below wave
         ctx.globalAlpha = 0.04 * intensity;
         ctx.fillStyle = wave.color;
         ctx.beginPath();
-        for (let x = 0; x <= w; x += 3) {
-            const amp = auroraY(x, baseY, wi, wave, t, intensity);
-            if (x === 0) ctx.moveTo(x, amp);
-            else ctx.lineTo(x, amp);
+        for (let j = 0; j < numPts; j++) {
+            if (j === 0) ctx.moveTo(0, ys[0]);
+            else ctx.lineTo(j * step, ys[j]);
         }
         ctx.lineTo(w, h);
         ctx.lineTo(0, h);
@@ -323,26 +422,14 @@ function drawAurora(w, h) {
         ctx.lineWidth = 2.5;
         ctx.strokeStyle = wave.color;
         ctx.globalAlpha = 0.7 * intensity + 0.3;
-        drawAuroraPath(w, h, baseY, wi, wave, t, intensity);
-        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        for (let j = 0; j < numPts; j++) {
+            if (j === 0) ctx.moveTo(0, ys[0]);
+            else ctx.lineTo(j * step, ys[j]);
+        }
+        ctx.stroke();
     }
-}
-
-function auroraY(x, baseY, idx, wave, t, intensity) {
-    return baseY +
-        Math.sin(t / wave.speed + x * wave.freq) * (wave.amp * baseY * intensity) +
-        Math.sin(t / (wave.speed * 1.7) + x * wave.freq * 2.3 + idx) * (wave.amp * baseY * 0.5 * intensity) +
-        Math.cos(t / (wave.speed * 0.6) + x * wave.freq * 0.4) * (wave.amp * baseY * 0.3 * intensity);
-}
-
-function drawAuroraPath(w, h, baseY, idx, wave, t, intensity) {
-    ctx.beginPath();
-    for (let x = 0; x <= w; x += 3) {
-        const y = auroraY(x, baseY, idx, wave, t, intensity);
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
+    ctx.globalAlpha = 1;
 }
 
 function drawScope(w, h) {
@@ -505,7 +592,9 @@ function startPlayback(id) {
     playingStationId = stationId;
     isBuffering = true;
     isPlaying = false;
+    idleDrawn = false;
     stopBtn.disabled = false;
+    startVisualizer();
     updateNowPlaying(station, true);
     renderStationList();
     updateStationsMenu();
@@ -1004,9 +1093,8 @@ audio.addEventListener('stalled', () => {
 
 /* -- Utility ---------------------------------------------- */
 function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    _escDiv.textContent = str;
+    return _escDiv.innerHTML;
 }
 
 function centerWindow() {
@@ -1025,9 +1113,13 @@ function init() {
     resizeCanvas();
     centerWindow();
     setVizMode(vizMode);
-    drawVisualizer();
+    startVisualizer();
     showWelcome();
-    window.addEventListener('resize', resizeCanvas);
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(resizeCanvas, 120);
+    });
 }
 
 document.addEventListener('DOMContentLoaded', init);
