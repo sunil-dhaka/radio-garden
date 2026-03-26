@@ -84,27 +84,36 @@ function resizeCanvas() {
 }
 
 /* -- Visualizer Drawing ----------------------------------- */
-function drawVisualizer() {
+let lastFrameTime = 0;
+const TARGET_FPS = 30;
+const FRAME_INTERVAL = 1000 / TARGET_FPS;
+const IDLE_FPS = 2;
+const IDLE_INTERVAL = 1000 / IDLE_FPS;
+
+function drawVisualizer(timestamp) {
     animFrameId = requestAnimationFrame(drawVisualizer);
+
+    // Throttle: 30fps when active, 2fps when idle
+    const active = isPlaying || isBuffering;
+    const interval = active ? FRAME_INTERVAL : IDLE_INTERVAL;
+    if (timestamp - lastFrameTime < interval) return;
+    lastFrameTime = timestamp;
+
     const w = canvas.width;
     const h = canvas.height;
     if (w === 0 || h === 0) return;
 
-    ctx.fillStyle = vizMode === 'scope'
-        ? 'rgba(8, 8, 15, 0.3)'
-        : 'rgba(8, 8, 15, 0.45)';
+    // Clear canvas (no persistence = less GPU work)
+    ctx.fillStyle = '#08080f';
     ctx.fillRect(0, 0, w, h);
 
-    // Grid
-    const gridColor = 'rgba(255, 255, 255, 0.02)';
-    ctx.strokeStyle = gridColor;
+    // Grid - single batched path
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
     ctx.lineWidth = 1;
-    for (let gy = 0; gy < h; gy += 24) {
-        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
-    }
-    for (let gx = 0; gx < w; gx += 24) {
-        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
-    }
+    ctx.beginPath();
+    for (let gy = 0; gy < h; gy += 24) { ctx.moveTo(0, gy); ctx.lineTo(w, gy); }
+    for (let gx = 0; gx < w; gx += 24) { ctx.moveTo(gx, 0); ctx.lineTo(gx, h); }
+    ctx.stroke();
 
     updateBarData(h);
 
@@ -176,15 +185,13 @@ function drawRainbow(w, h) {
         const y = h - barH;
         const hue = (i / BAR_COUNT) * 280;
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.25;
-        ctx.shadowColor = `hsl(${hue}, 100%, 55%)`;
-        ctx.shadowBlur = 14;
-        ctx.fillStyle = `hsl(${hue}, 90%, 50%)`;
-        ctx.fillRect(x, y, barW, barH);
-        ctx.restore();
+        // Soft glow behind bar (wider, dimmer, no shadowBlur)
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.fillRect(x - 2, y - 2, barW + 4, barH + 4);
+        ctx.globalAlpha = 1;
 
+        // Solid bar with gradient
         const grad = ctx.createLinearGradient(x, y, x, h);
         grad.addColorStop(0, `hsl(${hue}, 100%, 65%)`);
         grad.addColorStop(0.4, `hsl(${hue}, 95%, 50%)`);
@@ -192,20 +199,18 @@ function drawRainbow(w, h) {
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, barW, barH);
 
+        // Bright cap
         if (barH > 4) {
             ctx.fillStyle = `hsl(${hue}, 100%, 80%)`;
             ctx.fillRect(x, y, barW, 2);
         }
 
+        // Peak indicator
         if (peakHeights[i] > 2) {
             ctx.fillStyle = `hsl(${hue}, 100%, 90%)`;
-            ctx.shadowColor = `hsl(${hue}, 100%, 70%)`;
-            ctx.shadowBlur = 4;
             ctx.fillRect(x, h - peakHeights[i], barW, 2);
-            ctx.shadowBlur = 0;
         }
     }
-    drawReflection(w, h);
 }
 
 /* -- Radial Burst Mode ------------------------------------ */
@@ -244,16 +249,12 @@ function drawRadial(w, h) {
         const x2 = cx + cos * (innerR + barLen);
         const y2 = cy + sin * (innerR + barLen);
 
-        // Outer glow
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.25;
+        // Soft glow (wider line, dimmer)
+        ctx.globalAlpha = 0.2;
         ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
-        ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
-        ctx.shadowBlur = 10;
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-        ctx.restore();
+        ctx.globalAlpha = 1;
 
         // Core bar
         ctx.strokeStyle = `hsl(${hue}, 100%, 65%)`;
@@ -272,12 +273,9 @@ function drawRadial(w, h) {
             const px = cx + cos * (innerR + peakLen);
             const py = cy + sin * (innerR + peakLen);
             ctx.fillStyle = `hsl(${hue}, 100%, 95%)`;
-            ctx.shadowColor = `hsl(${hue}, 100%, 70%)`;
-            ctx.shadowBlur = 6;
             ctx.beginPath();
             ctx.arc(px, py, 2, 0, Math.PI * 2);
             ctx.fill();
-            ctx.shadowBlur = 0;
         }
     }
 }
@@ -301,20 +299,13 @@ function drawAurora(w, h) {
         const wave = waves[wi];
         const baseY = (h / (waves.length + 1)) * (wi + 1);
 
-        // Wide glow pass
-        ctx.save();
-        ctx.lineWidth = 8;
+        // Wide glow pass (thicker, dimmer line instead of shadowBlur)
+        ctx.lineWidth = 6;
         ctx.strokeStyle = wave.glow;
-        ctx.shadowColor = wave.glow;
-        ctx.shadowBlur = 25;
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.2 * intensity;
+        ctx.globalAlpha = 0.15 * intensity;
         drawAuroraPath(w, h, baseY, wi, wave, t, intensity);
-        ctx.restore();
 
         // Fill below the wave (aurora glow)
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.04 * intensity;
         ctx.fillStyle = wave.color;
         ctx.beginPath();
@@ -327,17 +318,13 @@ function drawAurora(w, h) {
         ctx.lineTo(0, h);
         ctx.closePath();
         ctx.fill();
-        ctx.restore();
 
         // Core line
         ctx.lineWidth = 2.5;
         ctx.strokeStyle = wave.color;
-        ctx.shadowColor = wave.color;
-        ctx.shadowBlur = 8;
         ctx.globalAlpha = 0.7 * intensity + 0.3;
         drawAuroraPath(w, h, baseY, wi, wave, t, intensity);
         ctx.globalAlpha = 1;
-        ctx.shadowBlur = 0;
     }
 }
 
@@ -360,27 +347,24 @@ function drawAuroraPath(w, h, baseY, idx, wave, t, intensity) {
 
 function drawScope(w, h) {
     const bufLen = 128;
+    // Center line
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
 
-    ctx.save();
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = 'rgba(0, 180, 255, 0.15)';
-    ctx.shadowColor = '#0088FF'; ctx.shadowBlur = 20;
-    ctx.globalCompositeOperation = 'lighter';
-    drawScopePath(w, h, bufLen); ctx.restore();
+    // Wide glow pass (no shadowBlur)
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(0, 180, 255, 0.12)';
+    drawScopePath(w, h, bufLen);
 
-    ctx.save();
+    // Mid pass
     ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
-    ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 8;
-    drawScopePath(w, h, bufLen); ctx.restore();
+    ctx.strokeStyle = 'rgba(68, 136, 255, 0.4)';
+    drawScopePath(w, h, bufLen);
 
+    // Core line
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#4488FF';
-    ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 4;
     drawScopePath(w, h, bufLen);
-    ctx.shadowBlur = 0;
 }
 
 function drawScopePath(w, h, bufLen) {
