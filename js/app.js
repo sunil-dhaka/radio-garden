@@ -71,8 +71,8 @@ let heatGradient = null;
 
 const VIZ_LABELS = {
     rainbow: 'RAINBOW SPECTRUM',
-    vu: 'VU METER',
-    crt: 'CRT PHOSPHOR',
+    radial: 'RADIAL BURST',
+    aurora: 'AURORA WAVES',
     scope: 'OSCILLOSCOPE',
 };
 
@@ -96,9 +96,7 @@ function drawVisualizer() {
     ctx.fillRect(0, 0, w, h);
 
     // Grid
-    const gridColor = vizMode === 'crt'
-        ? 'rgba(0, 204, 68, 0.05)'
-        : 'rgba(255, 255, 255, 0.02)';
+    const gridColor = 'rgba(255, 255, 255, 0.02)';
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     for (let gy = 0; gy < h; gy += 24) {
@@ -112,8 +110,8 @@ function drawVisualizer() {
 
     switch (vizMode) {
         case 'rainbow': drawRainbow(w, h); break;
-        case 'vu':      drawVU(w, h);      break;
-        case 'crt':     drawCRT(w, h);     break;
+        case 'radial':  drawRadial(w, h);  break;
+        case 'aurora':  drawAurora(w, h);  break;
         case 'scope':   drawScope(w, h);   break;
     }
 }
@@ -210,87 +208,154 @@ function drawRainbow(w, h) {
     drawReflection(w, h);
 }
 
-function drawVU(w, h) {
-    const { barW, gap } = barLayout(w);
+/* -- Radial Burst Mode ------------------------------------ */
+function drawRadial(w, h) {
+    const cx = w / 2;
+    const cy = h / 2;
+    const maxR = Math.min(cx, cy) * 0.88;
+    const innerR = maxR * 0.12;
+    const barCount = BAR_COUNT * 2; // More bars for full circle
 
-    if (!heatGradient || heatGradient.height !== Math.ceil(h)) {
-        const off = document.createElement('canvas');
-        off.width = 1; off.height = Math.ceil(h);
-        const octx = off.getContext('2d');
-        const g = octx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0.0, '#EF3110'); g.addColorStop(0.15, '#D65A00');
-        g.addColorStop(0.30, '#DEA518'); g.addColorStop(0.45, '#D6B521');
-        g.addColorStop(0.60, '#BDDE29'); g.addColorStop(0.75, '#29CE10');
-        g.addColorStop(0.90, '#319C08'); g.addColorStop(1.0, '#188408');
-        octx.fillStyle = g;
-        octx.fillRect(0, 0, 1, h);
-        heatGradient = off;
-    }
+    // Rotating inner ring
+    const t = Date.now();
+    const ringPulse = isPlaying || isBuffering ? 0.6 + Math.sin(t / 400) * 0.15 : 0.3;
+    ctx.save();
+    ctx.globalAlpha = ringPulse * 0.15;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
 
-    for (let i = 0; i < BAR_COUNT; i++) {
-        const barH = displayHeights[i];
+    for (let i = 0; i < barCount; i++) {
+        const dataIdx = i % BAR_COUNT;
+        const barH = displayHeights[dataIdx];
         if (barH < 1) continue;
-        const x = i * (barW + gap) + gap / 2;
-        const srcY = heatGradient.height - barH;
-        ctx.drawImage(heatGradient, 0, srcY, 1, barH, x, h - barH, barW, barH);
 
+        const angle = (i / barCount) * Math.PI * 2 - Math.PI / 2;
+        const barLen = (barH / (h * 0.82)) * (maxR - innerR);
+        const hue = (i / barCount) * 360;
+
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const x1 = cx + cos * innerR;
+        const y1 = cy + sin * innerR;
+        const x2 = cx + cos * (innerR + barLen);
+        const y2 = cy + sin * (innerR + barLen);
+
+        // Outer glow
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.15;
-        ctx.drawImage(heatGradient, 0, srcY, 1, barH, x, h - barH, barW, barH);
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
         ctx.restore();
 
-        if (peakHeights[i] > 2) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(x, h - peakHeights[i], barW, 2);
-        }
-    }
-    drawReflection(w, h);
-}
+        // Core bar
+        ctx.strokeStyle = `hsl(${hue}, 100%, 65%)`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
 
-function drawCRT(w, h) {
-    const { barW, gap } = barLayout(w);
-    for (let i = 0; i < BAR_COUNT; i++) {
-        const barH = displayHeights[i];
-        if (barH < 1) continue;
-        const x = i * (barW + gap) + gap / 2;
-        const y = h - barH;
+        // Bright tip
+        ctx.fillStyle = `hsl(${hue}, 100%, 85%)`;
+        ctx.beginPath();
+        ctx.arc(x2, y2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.2;
-        ctx.shadowColor = '#00CC44'; ctx.shadowBlur = 18;
-        ctx.fillStyle = '#00CC44';
-        ctx.fillRect(x, y, barW, barH);
-        ctx.restore();
-
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.4;
-        ctx.shadowColor = '#00FF55'; ctx.shadowBlur = 8;
-        ctx.fillStyle = '#00FF55';
-        ctx.fillRect(x, y, barW, barH);
-        ctx.restore();
-
-        const grad = ctx.createLinearGradient(x, y, x, h);
-        grad.addColorStop(0, '#00FF55');
-        grad.addColorStop(0.5, '#00CC44');
-        grad.addColorStop(1, '#006622');
-        ctx.fillStyle = grad;
-        ctx.fillRect(x, y, barW, barH);
-
-        if (barH > 4) { ctx.fillStyle = '#88FFAA'; ctx.fillRect(x, y, barW, 2); }
-        if (peakHeights[i] > 2) {
-            ctx.fillStyle = '#AAFFCC';
-            ctx.shadowColor = '#00FF55'; ctx.shadowBlur = 6;
-            ctx.fillRect(x, h - peakHeights[i], barW, 2);
+        // Peak dot
+        if (peakHeights[dataIdx] > 2) {
+            const peakLen = (peakHeights[dataIdx] / (h * 0.82)) * (maxR - innerR);
+            const px = cx + cos * (innerR + peakLen);
+            const py = cy + sin * (innerR + peakLen);
+            ctx.fillStyle = `hsl(${hue}, 100%, 95%)`;
+            ctx.shadowColor = `hsl(${hue}, 100%, 70%)`;
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.fill();
             ctx.shadowBlur = 0;
         }
     }
-    const scanY = (Date.now() / 15) % h;
-    ctx.fillStyle = 'rgba(0, 255, 68, 0.04)';
-    ctx.fillRect(0, scanY, w, 3);
-    drawReflection(w, h);
+}
+
+/* -- Aurora Waves Mode ------------------------------------ */
+function drawAurora(w, h) {
+    const waves = [
+        { color: '#FF00AA', glow: '#FF0088', speed: 280, freq: 0.012, amp: 0.14 },
+        { color: '#00FFCC', glow: '#00CCAA', speed: 350, freq: 0.009, amp: 0.16 },
+        { color: '#FFAA00', glow: '#CC8800', speed: 420, freq: 0.015, amp: 0.12 },
+        { color: '#44FF00', glow: '#33CC00', speed: 300, freq: 0.011, amp: 0.15 },
+        { color: '#8855FF', glow: '#6633DD', speed: 500, freq: 0.008, amp: 0.18 },
+        { color: '#FF4466', glow: '#CC3355', speed: 260, freq: 0.013, amp: 0.13 },
+    ];
+
+    const t = Date.now();
+    const active = isPlaying || isBuffering;
+    const intensity = active ? (isBuffering ? 0.4 : 1.0) : 0.05;
+
+    for (let wi = 0; wi < waves.length; wi++) {
+        const wave = waves[wi];
+        const baseY = (h / (waves.length + 1)) * (wi + 1);
+
+        // Wide glow pass
+        ctx.save();
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = wave.glow;
+        ctx.shadowColor = wave.glow;
+        ctx.shadowBlur = 25;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.2 * intensity;
+        drawAuroraPath(w, h, baseY, wi, wave, t, intensity);
+        ctx.restore();
+
+        // Fill below the wave (aurora glow)
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.04 * intensity;
+        ctx.fillStyle = wave.color;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 3) {
+            const amp = auroraY(x, baseY, wi, wave, t, intensity);
+            if (x === 0) ctx.moveTo(x, amp);
+            else ctx.lineTo(x, amp);
+        }
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Core line
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = wave.color;
+        ctx.shadowColor = wave.color;
+        ctx.shadowBlur = 8;
+        ctx.globalAlpha = 0.7 * intensity + 0.3;
+        drawAuroraPath(w, h, baseY, wi, wave, t, intensity);
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+    }
+}
+
+function auroraY(x, baseY, idx, wave, t, intensity) {
+    return baseY +
+        Math.sin(t / wave.speed + x * wave.freq) * (wave.amp * baseY * intensity) +
+        Math.sin(t / (wave.speed * 1.7) + x * wave.freq * 2.3 + idx) * (wave.amp * baseY * 0.5 * intensity) +
+        Math.cos(t / (wave.speed * 0.6) + x * wave.freq * 0.4) * (wave.amp * baseY * 0.3 * intensity);
+}
+
+function drawAuroraPath(w, h, baseY, idx, wave, t, intensity) {
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 3) {
+        const y = auroraY(x, baseY, idx, wave, t, intensity);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
 }
 
 function drawScope(w, h) {
@@ -342,22 +407,9 @@ function drawScopePath(w, h, bufLen) {
 }
 
 function drawReflection(w, h) {
-    const reflH = Math.floor(h * 0.12);
-    if (reflH < 4) return;
-    try {
-        const imgData = ctx.getImageData(0, h - reflH * 2, w, reflH);
-        ctx.save();
-        ctx.translate(0, h + reflH);
-        ctx.scale(1, -1);
-        ctx.globalAlpha = 0.12;
-        ctx.putImageData(imgData, 0, 0);
-        ctx.restore();
-    } catch (e) { /* skip */ }
-    const fade = ctx.createLinearGradient(0, h - reflH, 0, h);
-    fade.addColorStop(0, 'rgba(8, 8, 15, 0.3)');
-    fade.addColorStop(1, 'rgba(8, 8, 15, 1)');
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, h - reflH, w, reflH);
+    // Removed: putImageData ignores canvas transforms, causing bars
+    // to render at the top of the canvas instead of as a reflection.
+    // The rainbow bars look clean without a reflection effect.
 }
 
 /* -- Station Management ----------------------------------- */
@@ -752,8 +804,8 @@ document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
         else if (action === 'show-window') showWindow();
         else if (action === 'toggle-balloons') toggleBalloonHelp();
         else if (action === 'viz-rainbow') setVizMode('rainbow');
-        else if (action === 'viz-vu') setVizMode('vu');
-        else if (action === 'viz-crt') setVizMode('crt');
+        else if (action === 'viz-radial') setVizMode('radial');
+        else if (action === 'viz-aurora') setVizMode('aurora');
         else if (action === 'viz-scope') setVizMode('scope');
         else if (stationId) startPlayback(stationId);
 
@@ -792,7 +844,7 @@ function setVizMode(mode) {
     vizMode = mode;
     localStorage.setItem(VIZ_KEY, mode);
     vizLabel.textContent = VIZ_LABELS[mode] || mode.toUpperCase();
-    ['rainbow', 'vu', 'crt', 'scope'].forEach(m => {
+    ['rainbow', 'radial', 'aurora', 'scope'].forEach(m => {
         const el = document.getElementById('check-' + m);
         if (el) el.textContent = m === mode ? '\u2713' : '';
     });
