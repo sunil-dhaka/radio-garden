@@ -253,14 +253,10 @@
                     <div class="help-body" id="help-body">
                         <div class="help-page" id="help-getting-started">
                             <h3>Getting Started</h3>
-                            <p><strong>Playing a station</strong> is simple: just click
-                            any station name in the list on the left. It starts
-                            playing immediately.</p>
-                            <p>Use the <strong>Stop</strong> button or press <strong>Space</strong>
-                            to stop playback. Click another station to switch.</p>
-                            <p>The <strong>volume slider</strong> on the right adjusts loudness.</p>
-                            <p><em>Tip: Enable "Balloon Help" from the Help menu to see
-                            explanations when you hover over any control.</em></p>
+                            <p><strong>1.</strong> Click any <strong>station</strong> in the sidebar to start listening instantly.</p>
+                            <p><strong>2.</strong> Add your own stations with <strong>&#8984;N</strong> or the Add button. Paste a radio.garden URL and it auto-resolves.</p>
+                            <p><strong>3.</strong> Switch <strong>visualizer styles</strong> from the View menu (Rainbow, Radial, Aurora, Oscilloscope).</p>
+                            <p>Use <strong>Space</strong> to stop/resume, <strong>&#8593;/&#8595;</strong> to navigate stations.</p>
                         </div>
                         <div class="help-page" id="help-stations" style="display:none">
                             <h3>Managing Stations</h3>
@@ -306,39 +302,6 @@
         </div>
     </div>
 
-    <!-- Welcome Dialog -->
-    <div class="dialog-overlay" id="welcome-dialog-overlay">
-        <div class="window dialog welcome-dialog">
-            <div class="window-titlebar">
-                <div class="window-title">Welcome to Radio Garden</div>
-            </div>
-            <div class="window-body">
-                <div class="welcome-content">
-                    <div class="welcome-icon">&#128251;</div>
-                    <div class="welcome-steps">
-                        <div class="welcome-step">
-                            <span class="welcome-num">1</span>
-                            <span>Click any <strong>station</strong> to start listening instantly</span>
-                        </div>
-                        <div class="welcome-step">
-                            <span class="welcome-num">2</span>
-                            <span>Add your own stations with <strong>&#8984;N</strong> or the Add button</span>
-                        </div>
-                        <div class="welcome-step">
-                            <span class="welcome-num">3</span>
-                            <span>Switch <strong>visualizer styles</strong> from the View menu</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="dialog-buttons">
-                    <label class="welcome-checkbox">
-                        <input type="checkbox" id="welcome-dont-show"> Don't show again
-                    </label>
-                    <button class="mac-btn default-btn" id="welcome-ok-btn">Let's Go</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <audio id="audio-player" preload="none"></audio>
     <script src="js/app.js"></script>

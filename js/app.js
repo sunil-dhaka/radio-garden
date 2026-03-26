@@ -24,7 +24,6 @@ const DEFAULT_STATIONS = [
 ];
 
 const STORAGE_KEY = 'radio-garden-stations-v2';
-const ONBOARDED_KEY = 'radio-garden-onboarded';
 const VIZ_KEY = 'radio-garden-viz';
 
 const RADIO_GARDEN_REGEX = /\/listen\/[^/]+\/([a-zA-Z0-9_]+)/;
@@ -783,24 +782,13 @@ document.querySelectorAll('.help-topic').forEach(topic => {
     });
 });
 
-const overlayIds = ['add-dialog-overlay', 'about-dialog-overlay', 'help-dialog-overlay', 'welcome-dialog-overlay'];
+const overlayIds = ['add-dialog-overlay', 'about-dialog-overlay', 'help-dialog-overlay'];
 overlayIds.forEach(id => {
     document.getElementById(id).addEventListener('click', (e) => {
         if (e.target.id === id) e.target.classList.remove('visible');
     });
 });
 
-function showWelcome() {
-    if (localStorage.getItem(ONBOARDED_KEY)) return;
-    document.getElementById('welcome-dialog-overlay').classList.add('visible');
-}
-
-document.getElementById('welcome-ok-btn').addEventListener('click', () => {
-    if (document.getElementById('welcome-dont-show').checked) {
-        localStorage.setItem(ONBOARDED_KEY, '1');
-    }
-    document.getElementById('welcome-dialog-overlay').classList.remove('visible');
-});
 
 /* -- Balloon Help ----------------------------------------- */
 function toggleBalloonHelp() {
@@ -1114,7 +1102,7 @@ function init() {
     centerWindow();
     setVizMode(vizMode);
     startVisualizer();
-    showWelcome();
+
     let resizeTimer;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);

@@ -736,43 +736,6 @@ html, body {
 .help-table td:first-child { width: 80px; }
 
 /* -- Welcome ---------------------------------------------- */
-.welcome-dialog { width: 380px; }
-
-.welcome-content { padding: 20px; text-align: center; }
-.welcome-icon { font-size: 48px; margin-bottom: 12px; }
-
-.welcome-steps { text-align: left; }
-
-.welcome-step {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 0;
-    font-size: 12px;
-    line-height: 1.4;
-}
-
-.welcome-num {
-    width: 24px; height: 24px;
-    border-radius: 50%;
-    background: var(--highlight);
-    color: var(--white);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 12px;
-    flex-shrink: 0;
-}
-
-.welcome-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    margin-right: auto;
-    cursor: default;
-}
 
 /* -- Balloon Help ----------------------------------------- */
 .balloon {
